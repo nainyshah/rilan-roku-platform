@@ -329,4 +329,75 @@ export const importRouter = router({
       await db.delete(importLogs).where(eq(importLogs.id, input.id));
       return { success: true };
     }),
+
+  /**
+   * Fetch the original CSV for a past import log from S3 and return it as a
+   * UTF-8 text string so the frontend can reconstruct a File object and
+   * pre-populate the Import Videos page without re-uploading.
+   */
+  getReimportData: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      const [log] = await db
+        .select()
+        .from(importLogs)
+        .where(eq(importLogs.id, input.id))
+        .limit(1);
+      if (!log) throw new TRPCError({ code: "NOT_FOUND", message: "Import log not found" });
+
+      if (!log.csvS3Key && !log.csvUrl) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "No CSV file was stored for this import. It may have been created before file storage was enabled.",
+        });
+      }
+
+      // Prefer fetching a fresh signed URL from S3 key; fall back to stored URL
+      let downloadUrl: string;
+      if (log.csvS3Key) {
+        try {
+          const { storageGet } = await import("../storage");
+          const result = await storageGet(log.csvS3Key);
+          downloadUrl = result.url;
+        } catch {
+          if (!log.csvUrl) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Failed to generate download URL for the stored CSV.",
+            });
+          }
+          downloadUrl = log.csvUrl;
+        }
+      } else {
+        downloadUrl = log.csvUrl!;
+      }
+
+      // Fetch the CSV bytes from S3
+      const response = await fetch(downloadUrl);
+      if (!response.ok) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to fetch CSV from storage (HTTP ${response.status}).`,
+        });
+      }
+      const csvText = await response.text();
+
+      return {
+        logId: log.id,
+        filename: log.filename ?? "reimport.csv",
+        csvText,
+        defaultChannelSlug: log.defaultChannelSlug ?? undefined,
+        defaultCategorySlug: log.defaultCategorySlug ?? undefined,
+        originalStats: {
+          totalRows: log.totalRows,
+          importedCount: log.importedCount,
+          skippedCount: log.skippedCount,
+          duplicateCount: log.duplicateCount,
+          errorCount: log.errorCount,
+        },
+      };
+    }),
 });

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -125,11 +125,44 @@ export default function ImportVideos() {
   const [defaultChannelSlug, setDefaultChannelSlug] = useState<string>("none");
   const [defaultCategorySlug, setDefaultCategorySlug] = useState<string>("none");
   const [skipErrors, setSkipErrors] = useState(true);
+  const [reimportBanner, setReimportBanner] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check for ?reimportLogId= query param (set by Import History page)
+  const reimportLogId = (() => {
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get("reimportLogId");
+    return v ? parseInt(v, 10) : null;
+  })();
 
   const { data: channels } = trpc.channels.list.useQuery({});
   const { data: categories } = trpc.categories.list.useQuery(undefined);
   const { data: templateData } = trpc.import.getTemplate.useQuery();
+
+  // Fetch re-import data when a log ID is present in the URL
+  const { data: reimportData, isLoading: reimportLoading, error: reimportError } =
+    trpc.import.getReimportData.useQuery(
+      { id: reimportLogId! },
+      { enabled: reimportLogId !== null }
+    );
+
+  // When re-import data arrives, pre-populate the CSV state
+  useEffect(() => {
+    if (!reimportData) return;
+    setCsvText(reimportData.csvText);
+    setFileName(reimportData.filename);
+    setParsedRows(null);
+    setImportResults(null);
+    if (reimportData.defaultChannelSlug) setDefaultChannelSlug(reimportData.defaultChannelSlug);
+    if (reimportData.defaultCategorySlug) setDefaultCategorySlug(reimportData.defaultCategorySlug);
+    setReimportBanner(reimportData.filename);
+  }, [reimportData]);
+
+  useEffect(() => {
+    if (reimportError) {
+      toast.error(`Could not load CSV: ${reimportError.message}`);
+    }
+  }, [reimportError]);
 
   const parseMutation = trpc.import.parsePreview.useMutation({
     onSuccess: (data) => {
@@ -248,6 +281,35 @@ export default function ImportVideos() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6 max-w-6xl">
+        {/* Re-import loading overlay */}
+        {reimportLoading && reimportLogId && (
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Loading CSV from import history...
+          </div>
+        )}
+
+        {/* Re-import banner */}
+        {reimportBanner && (
+          <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <div className="flex items-center gap-2 text-amber-400 text-sm">
+              <HistoryIcon className="w-4 h-4" />
+              <span>Re-importing from: <span className="font-mono font-medium">{reimportBanner}</span></span>
+            </div>
+            <button
+              onClick={() => {
+                setReimportBanner(null);
+                handleReset();
+                // Clear the query param without navigation
+                window.history.replaceState({}, "", window.location.pathname);
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              × Clear
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-4">
           <Link href="/videos">

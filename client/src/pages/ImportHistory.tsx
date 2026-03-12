@@ -52,7 +52,7 @@ import {
   Calendar,
   BarChart3,
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ImportLog {
@@ -136,7 +136,7 @@ function LogSummaryBadges({ log }: { log: ImportLog }) {
   );
 }
 
-// ─── Detail drawer ────────────────────────────────────────────────────────────
+// ─── // ─── Detail drawer ────────────────────────────────────────────
 function LogDetailDrawer({
   logId,
   open,
@@ -146,6 +146,7 @@ function LogDetailDrawer({
   open: boolean;
   onClose: () => void;
 }) {
+  const [, navigate] = useLocation();
   const { data: log, isLoading } = trpc.import.getLog.useQuery(
     { id: logId! },
     { enabled: open && logId !== null }
@@ -158,6 +159,12 @@ function LogDetailDrawer({
     a.download = log.filename;
     a.target = "_blank";
     a.click();
+  };
+
+  const handleReimport = () => {
+    if (!log) return;
+    onClose();
+    navigate(`/import?reimportLogId=${log.id}`);
   };
 
   const results = (log?.resultsJson as RowResult[] | null) ?? [];
@@ -231,16 +238,32 @@ function LogDetailDrawer({
               </div>
             </div>
 
-            {/* CSV download */}
-            {log.csvUrl ? (
-              <Button onClick={downloadCsv} variant="outline" className="w-full mb-6 gap-2">
-                <Download className="w-4 h-4" />
-                Re-download Original CSV ({log.filename})
+            {/* CSV actions */}
+            <div className="flex gap-2 mb-6">
+              <Button
+                onClick={handleReimport}
+                className="flex-1 gap-2"
+                title="Load this CSV into the Import page to fix errors and re-run"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Re-import from this CSV
               </Button>
-            ) : (
-              <div className="text-sm text-muted-foreground text-center py-2 mb-6 border rounded-lg">
-                Original CSV not available (storage upload may have failed)
-              </div>
+              {log.csvUrl ? (
+                <Button onClick={downloadCsv} variant="outline" className="gap-2">
+                  <Download className="w-4 h-4" />
+                  Download CSV
+                </Button>
+              ) : (
+                <Button variant="outline" disabled className="gap-2 opacity-50">
+                  <Download className="w-4 h-4" />
+                  No CSV
+                </Button>
+              )}
+            </div>
+            {!log.csvUrl && (
+              <p className="text-xs text-muted-foreground text-center -mt-4 mb-4">
+                Note: CSV file not available for download — storage upload may have failed for this run.
+              </p>
             )}
 
             {/* Per-row results */}
@@ -300,11 +323,11 @@ function LogDetailDrawer({
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main page ───────────// ─── Main page ────────────────────────────────────────────
 export default function ImportHistory() {
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
-
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { data, isLoading, refetch } = trpc.import.listLogs.useQuery({ limit: 100 });
 
@@ -496,6 +519,15 @@ export default function ImportHistory() {
                               title="View details"
                             >
                               <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-primary hover:text-primary"
+                              onClick={() => navigate(`/import?reimportLogId=${log.id}`)}
+                              title="Re-import from this CSV"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
                             </Button>
                             <Button
                               variant="ghost"

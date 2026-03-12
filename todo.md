@@ -88,3 +88,12 @@
 - [x] Frontend: Schedule indicator on Videos list page (shows if video has any active schedule)
 - [x] Frontend: Feed Preview shows schedule-filtered video count vs total
 - [x] Tests: Schedule filter unit tests (9 tests passing, 54 total)
+
+## Re-import from History
+- [x] Backend: getReimportData procedure — fetch CSV from S3 by log ID, return as base64 string + filename
+- [x] Frontend: ImportVideos page accepts ?reimportLogId= query param to auto-load a stored CSV
+- [x] Frontend: On mount with reimportLogId, call getReimportData, decode base64 → File object, trigger parse
+- [x] Frontend: Show "Re-importing from: [filename]" banner when in re-import mode
+- [x] Frontend: Re-import button in ImportHistory detail drawer with loading state
+- [x] Frontend: After re-import completes, navigate to Import History to show new log entry
+- [x] Tests: Re-import procedure unit test (5 tests: not found, no CSV, success, S3 fallback, fetch error)
