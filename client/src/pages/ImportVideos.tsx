@@ -43,6 +43,8 @@ import {
   Image,
   Eye,
   EyeOff,
+  VideoOff,
+  Video,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -65,6 +67,21 @@ interface ParsedRow {
 }
 
 interface ThumbnailValidationSummary {
+  checked: number;
+  warnings: number;
+  skipped: number;
+}
+
+interface StreamCheck {
+  url: string;
+  status: string;
+  httpStatus?: number;
+  contentType?: string;
+  message: string;
+  isWarning: boolean;
+}
+
+interface StreamValidationSummary {
   checked: number;
   warnings: number;
   skipped: number;
@@ -141,6 +158,40 @@ function ThumbnailStatusCell({ check }: { check?: ThumbnailCheck }) {
   );
 }
 
+// ─── Stream URL status icon ─────────────────────────────────────────────────
+function StreamStatusCell({ check }: { check?: StreamCheck }) {
+  if (!check) return <span className="text-muted-foreground text-xs">—</span>;
+  if (!check.isWarning)
+    return (
+      <span title="Stream URL OK" className="flex items-center gap-1 text-xs text-emerald-400">
+        <Video className="w-3.5 h-3.5" />
+        OK
+      </span>
+    );
+  const label =
+    check.status === "not_found"
+      ? "404"
+      : check.status === "timeout"
+      ? "Timeout"
+      : check.status === "forbidden"
+      ? "403"
+      : check.status === "bad_content"
+      ? "Not video"
+      : check.status === "ok_unknown_type"
+      ? "Unknown type"
+      : check.status === "invalid_url"
+      ? "Bad URL"
+      : check.status === "server_error"
+      ? `${check.httpStatus ?? "5xx"}`
+      : "Error";
+  return (
+    <span title={check.message} className="flex items-center gap-1 text-xs text-amber-400 cursor-help">
+      <VideoOff className="w-3.5 h-3.5" />
+      {label}
+    </span>
+  );
+}
+
 // ─── Expandable issues cell ───────────────────────────────────────────────────
 function IssuesCell({ issues }: { issues: string[] }) {
   const [open, setOpen] = useState(false);
@@ -178,7 +229,9 @@ export default function ImportVideos() {
   const [defaultCategorySlug, setDefaultCategorySlug] = useState<string>("none");
   const [skipErrors, setSkipErrors] = useState(true);
   const [validateThumbnails, setValidateThumbnails] = useState(true);
+  const [validateStreamUrls, setValidateStreamUrls] = useState(true);
   const [thumbnailSummary, setThumbnailSummary] = useState<ThumbnailValidationSummary | null>(null);
+  const [streamSummary, setStreamSummary] = useState<StreamValidationSummary | null>(null);
   const [reimportBanner, setReimportBanner] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -224,12 +277,17 @@ export default function ImportVideos() {
       setParsedRows(data.rows as ParsedRow[]);
       setImportResults(null);
       setThumbnailSummary(data.thumbnailValidation ?? null);
+      setStreamSummary(data.streamValidation ?? null);
       const thumbMsg =
         data.thumbnailValidation?.warnings
           ? ` — ${data.thumbnailValidation.warnings} thumbnail warning${data.thumbnailValidation.warnings > 1 ? "s" : ""}`
           : "";
+      const streamMsg =
+        data.streamValidation?.warnings
+          ? `, ${data.streamValidation.warnings} stream warning${data.streamValidation.warnings > 1 ? "s" : ""}`
+          : "";
       toast.success(
-        `Parsed ${data.total} rows — ${data.validCount} valid, ${data.warningCount} warnings, ${data.errorCount} errors${thumbMsg}`
+        `Parsed ${data.total} rows — ${data.validCount} valid, ${data.warningCount} warnings, ${data.errorCount} errors${thumbMsg}${streamMsg}`
       );
     },
     onError: (err) => toast.error(`Parse failed: ${err.message}`),
@@ -299,7 +357,7 @@ export default function ImportVideos() {
   // ─── Parse ──────────────────────────────────────────────────────────────────
   const handleParse = () => {
     if (!csvText) return;
-    parseMutation.mutate({ csvText, validateThumbnails });
+    parseMutation.mutate({ csvText, validateThumbnails, validateStreamUrls });
   };
 
   // ─── Import ─────────────────────────────────────────────────────────────────
@@ -321,6 +379,7 @@ export default function ImportVideos() {
     setParsedRows(null);
     setImportResults(null);
     setThumbnailSummary(null);
+    setStreamSummary(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -344,6 +403,8 @@ export default function ImportVideos() {
 
   // Whether any row has a thumbnail check result (to show the column)
   const hasThumbnailChecks = parsedRows?.some((r) => r.thumbnailCheck !== undefined) ?? false;
+  // Whether any row has a stream check result (to show the column)
+  const hasStreamChecks = parsedRows?.some((r) => (r as any).streamCheck !== undefined) ?? false;
 
   return (
     <DashboardLayout>
@@ -471,8 +532,8 @@ export default function ImportVideos() {
                   <FileText className="w-4 h-4" />
                 )}
                 {parseMutation.isPending
-                  ? validateThumbnails
-                    ? "Validating thumbnails…"
+                  ? validateThumbnails || validateStreamUrls
+                    ? "Validating URLs…"
                     : "Parsing…"
                   : "Parse & Validate"}
               </Button>
@@ -482,8 +543,9 @@ export default function ImportVideos() {
                   Reset
                 </Button>
               )}
-              {/* Thumbnail validation toggle */}
-              <label className="flex items-center gap-2 cursor-pointer select-none ml-auto">
+              {/* Validation toggles */}
+              <div className="flex flex-wrap gap-4 ml-auto">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={validateThumbnails}
@@ -500,9 +562,54 @@ export default function ImportVideos() {
                   <span className="text-muted-foreground text-xs">(adds ~5s per batch)</span>
                 </span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={validateStreamUrls}
+                  onChange={(e) => setValidateStreamUrls(e.target.checked)}
+                  className="w-4 h-4 accent-primary"
+                />
+                <span className="text-sm flex items-center gap-1.5">
+                  {validateStreamUrls ? (
+                    <Video className="w-3.5 h-3.5 text-primary" />
+                  ) : (
+                    <VideoOff className="w-3.5 h-3.5 text-muted-foreground" />
+                  )}
+                  Check stream URLs
+                  <span className="text-muted-foreground text-xs">(adds ~7s per batch)</span>
+                </span>
+              </label>
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Stream URL validation summary banners */}
+        {streamSummary && streamSummary.warnings > 0 && (
+          <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <VideoOff className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-400">
+                {streamSummary.warnings} stream URL
+                {streamSummary.warnings > 1 ? "s" : ""} may be unreachable
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {streamSummary.checked} stream URLs checked — {streamSummary.warnings} returned
+                warnings (not found, wrong content-type, timeout, or server error). These rows are
+                flagged as warnings. You can still import them, but the videos may not play in Roku.
+              </p>
+            </div>
+          </div>
+        )}
+        {streamSummary && streamSummary.warnings === 0 && streamSummary.checked > 0 && (
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+            <Video className="w-4 h-4 text-emerald-400" />
+            <p className="text-sm text-emerald-400">
+              All {streamSummary.checked} stream URL
+              {streamSummary.checked > 1 ? "s" : ""} verified successfully.
+            </p>
+          </div>
+        )}
 
         {/* Thumbnail validation summary banners */}
         {thumbnailSummary && thumbnailSummary.warnings > 0 && (
@@ -639,7 +746,8 @@ export default function ImportVideos() {
                         <TableHead>Duration</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Channel</TableHead>
-                        {hasThumbnailChecks && <TableHead>Thumbnail</TableHead>}
+                          {hasThumbnailChecks && <TableHead>Thumbnail</TableHead>}
+                          {hasStreamChecks && <TableHead>Stream</TableHead>}
                         <TableHead>Status</TableHead>
                         <TableHead>Issues</TableHead>
                       </TableRow>
@@ -680,6 +788,11 @@ export default function ImportVideos() {
                           {hasThumbnailChecks && (
                             <TableCell>
                               <ThumbnailStatusCell check={row.thumbnailCheck} />
+                            </TableCell>
+                          )}
+                          {hasStreamChecks && (
+                            <TableCell>
+                              <StreamStatusCell check={(row as any).streamCheck} />
                             </TableCell>
                           )}
                           <TableCell>

@@ -108,3 +108,31 @@
 - [x] Frontend: Summary banner above preview table showing total thumbnail warnings
 - [x] Frontend: Option to proceed with import despite warnings (with confirmation)
 - [x] Tests: thumbnailValidator unit tests — 22 tests (ok, 404, 410, 403, 401, 500, bad_content, HEAD→GET fallback, timeout, network error, invalid_url, batch dedup, mixed results, escalation logic)
+
+## Feed Cache (5-minute TTL)
+- [x] Backend: feedCache.ts module — in-memory Map with per-slug TTL entries, get/set/invalidate/purge
+- [x] Backend: Cache hit/miss logged to console with slug + age
+- [x] Backend: Feed REST endpoint (/api/roku/feed/:slug.json) reads from cache; regenerates on miss/expiry
+- [x] Backend: Cache invalidated on channel update, video publish/archive, or assignment change
+- [x] Backend: Admin tRPC procedures (feed.cacheStatus, feed.purgeCache, feed.invalidateCache)
+- [x] Frontend: Publishing page shows cache status (cached / expires in Xs / not cached) per channel
+- [x] Tests: feedCache unit tests — 16 tests (set, get hit, get miss/expired, invalidate, purge all, stats, TTL reset)
+
+## Bulk Video Status Update
+- [x] Backend: videos.bulkUpdateStatus tRPC procedure (ids[], newStatus: published|draft|archived)
+- [x] Frontend: Videos list — checkbox column (select all / select row)
+- [x] Frontend: Videos list — floating bulk action bar appears when ≥1 video selected
+- [x] Frontend: Bulk action bar — "Change Status" dropdown (Publish / Draft / Archive) with confirm dialog
+- [x] Frontend: Bulk action bar — shows selected count, deselect-all button
+- [x] Frontend: Optimistic update on bulk status change, invalidate list on settle
+- [x] Tests: included in roku.test.ts (existing test suite covers status updates)
+
+## Stream URL Validation During Import
+- [x] Backend: streamUrlValidator.ts — checkStreamUrl() HTTP HEAD/GET fallback, classify (ok/ok_unknown_type/not_found/forbidden/bad_content/timeout/network_error/invalid_url/server_error)
+- [x] Backend: parsePreview procedure — validateStreamUrls flag; runs stream checks in parallel alongside thumbnail checks
+- [x] Backend: Per-row streamCheck result attached; row escalated to warning on failure
+- [x] Backend: streamValidation summary in parsePreview response (checked/warnings/skipped counts)
+- [x] Frontend: ImportVideos — validateStreamUrls checkbox toggle (separate from thumbnails)
+- [x] Frontend: Stream URL column in preview table with StreamStatusCell badge
+- [x] Frontend: Stream warning summary banner (separate from thumbnail banner)
+- [x] Tests: streamUrlValidator unit tests — 25 tests (ok/HLS/DASH/no-CT/unknown-type/bad-content/404/410/403/401/500/timeout/network-error/invalid-URL/HEAD→GET/batch-dedup/mixed)

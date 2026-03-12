@@ -15,6 +15,7 @@ import {
 import { importLogs, videos } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 import { checkThumbnailUrls, type ThumbnailCheckResult } from "../thumbnailValidator";
+import { checkStreamUrls, type StreamCheckResult } from "../streamUrlValidator";
 
 // ─── Role guard ───────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -71,6 +72,7 @@ export interface ParsedRow {
   status: "valid" | "warning" | "error";
   issues: string[];
   thumbnailCheck?: ThumbnailCheckResult;
+  streamCheck?: StreamCheckResult;
 }
 
 export function parseCsvText(csvText: string): { rows: ParsedRow[]; headers: string[] } {
@@ -114,6 +116,8 @@ export const importRouter = router({
         csvText: z.string().min(1, "CSV content is required"),
         /** When true, run HTTP HEAD checks on thumbnail URLs (adds latency) */
         validateThumbnails: z.boolean().default(true),
+        /** When true, run HTTP HEAD checks on stream URLs (adds latency) */
+        validateStreamUrls: z.boolean().default(true),
       })
     )
     .mutation(async ({ input }) => {
@@ -156,6 +160,41 @@ export const importRouter = router({
         }
       }
 
+      // ── Stream URL validation ──────────────────────────────────────────────
+      let streamWarningCount = 0;
+      let streamChecks: Map<string, StreamCheckResult> = new Map();
+
+      if (input.validateStreamUrls) {
+        // Only check rows that passed schema validation and have a streamUrl
+        const streamUrlsToCheck = rows
+          .filter((r) => r.status !== "error" && r.data.streamUrl)
+          .map((r) => r.data.streamUrl as string);
+
+        if (streamUrlsToCheck.length > 0) {
+          streamChecks = await checkStreamUrls(streamUrlsToCheck);
+        }
+
+        // Attach check results to rows
+        for (const row of rows) {
+          if (row.status === "error") continue;
+          if (!row.data.streamUrl) continue;
+
+          const check = streamChecks.get(row.data.streamUrl);
+          if (check) {
+            row.streamCheck = check;
+            if (check.isWarning) {
+              streamWarningCount++;
+              if (row.status === "valid") {
+                row.status = "warning";
+              }
+              if (!row.issues.includes(check.message)) {
+                row.issues.push(`Stream URL: ${check.message}`);
+              }
+            }
+          }
+        }
+      }
+
       const validCount = rows.filter((r) => r.status === "valid").length;
       const warningCount = rows.filter((r) => r.status === "warning").length;
       const errorCount = rows.filter((r) => r.status === "error").length;
@@ -172,6 +211,13 @@ export const importRouter = router({
               checked: thumbnailChecks.size,
               warnings: thumbnailWarningCount,
               skipped: rows.filter((r) => r.status !== "error" && !r.data.thumbnailUrl).length,
+            }
+          : null,
+        streamValidation: input.validateStreamUrls
+          ? {
+              checked: streamChecks.size,
+              warnings: streamWarningCount,
+              skipped: rows.filter((r) => r.status !== "error" && !r.data.streamUrl).length,
             }
           : null,
       };

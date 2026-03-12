@@ -37,6 +37,12 @@ import {
 } from "./db";
 import { storagePut } from "./storage";
 import { generateRokuFeed, generateValidationReport, validateVideo } from "./feedGenerator";
+import {
+  getFeedCacheStatus,
+  getFeedCacheStatusForSlug,
+  invalidateFeedCache,
+  purgeAllFeedCache,
+} from "./feedCache";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -424,6 +430,28 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return getVideosWithScheduleSummary(input.videoIds);
       }),
+
+    /**
+     * Bulk update the publishStatus of multiple videos at once.
+     */
+    bulkUpdateStatus: adminProcedure
+      .input(
+        z.object({
+          ids: z.array(z.number()).min(1),
+          status: z.enum(["draft", "pending", "approved", "published", "archived"]),
+        })
+      )
+      .mutation(async ({ input }) => {
+        let updatedCount = 0;
+        let notFoundCount = 0;
+        for (const id of input.ids) {
+          const video = await getVideoById(id);
+          if (!video) { notFoundCount++; continue; }
+          await updateVideoStatus(id, input.status);
+          updatedCount++;
+        }
+        return { success: true, updatedCount, notFoundCount, total: input.ids.length };
+      }),
   }),
 
   // ─── Categories ────────────────────────────────────────────────────────────
@@ -552,6 +580,32 @@ export const appRouter = router({
           absoluteFeedUrl: `${baseUrl}/api/roku/feed/${input.channelSlug}.json`,
         };
       }),
+
+    /** Get in-memory cache status for all channel slugs. */
+    cacheStatus: adminProcedure.query(() => {
+      return getFeedCacheStatus();
+    }),
+
+    /** Get cache status for a single channel slug. */
+    cacheStatusForSlug: adminProcedure
+      .input(z.object({ slug: z.string() }))
+      .query(({ input }) => {
+        return getFeedCacheStatusForSlug(input.slug);
+      }),
+
+    /** Manually invalidate the cache for a specific channel slug. */
+    invalidateCache: adminProcedure
+      .input(z.object({ slug: z.string() }))
+      .mutation(({ input }) => {
+        const removed = invalidateFeedCache(input.slug);
+        return { success: true, removed };
+      }),
+
+    /** Purge the entire feed cache. */
+    purgeCache: adminProcedure.mutation(() => {
+      const count = purgeAllFeedCache();
+      return { success: true, purgedCount: count };
+    }),
   }),
 });
 

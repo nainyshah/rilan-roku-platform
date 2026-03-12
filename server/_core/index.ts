@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getFeedData, getChannelBySlug } from "../db";
 import { generateRokuFeed } from "../feedGenerator";
+import { getCachedFeed, setCachedFeed } from "../feedCache";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -37,10 +38,23 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // ─── Public Roku Feed Endpoints ───────────────────────────────────────────
-  // GET /api/roku/feed/:slug.json — Roku Direct Publisher feed
+  // GET /api/roku/feed/:slug.json — Roku Direct Publisher feed (with 5-min TTL cache)
   app.get("/api/roku/feed/:slug", async (req, res) => {
     try {
       const slug = req.params.slug.replace(/\.json$/, "");
+
+      // Check cache first
+      const cached = getCachedFeed(slug);
+      if (cached) {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Cache-Control", "public, max-age=300");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("X-Cache", "HIT");
+        res.setHeader("X-Cache-Age", String(Math.round((Date.now() - cached.generatedAt) / 1000)));
+        res.send(cached.feedJson);
+        return;
+      }
+
       const data = await getFeedData(slug);
       if (!data) {
         res.status(404).json({ error: "Channel not found" });
@@ -52,10 +66,16 @@ async function startServer() {
         return;
       }
       const feed = generateRokuFeed(channel, rows, channelVideoRows, vcMappings);
+      const feedJson = JSON.stringify(feed);
+
+      // Store in cache (5-minute TTL)
+      setCachedFeed(slug, feedJson);
+
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Cache-Control", "public, max-age=300");
       res.setHeader("Access-Control-Allow-Origin", "*");
-      res.json(feed);
+      res.setHeader("X-Cache", "MISS");
+      res.send(feedJson);
     } catch (err) {
       console.error("[Feed] Error generating feed:", err);
       res.status(500).json({ error: "Feed generation failed" });
