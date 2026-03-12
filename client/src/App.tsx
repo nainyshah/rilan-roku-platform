@@ -4,32 +4,40 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import DashboardLayout from "./components/DashboardLayout";
+import Dashboard from "./pages/Dashboard";
+import Channels from "./pages/Channels";
+import ChannelDetail from "./pages/ChannelDetail";
+import Videos from "./pages/Videos";
+import VideoDetail from "./pages/VideoDetail";
+import Categories from "./pages/Categories";
+import Branding from "./pages/Branding";
+import FeedPreview from "./pages/FeedPreview";
+import Publishing from "./pages/Publishing";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
-    </Switch>
+    <DashboardLayout>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/channels" component={Channels} />
+        <Route path="/channels/:id" component={ChannelDetail} />
+        <Route path="/videos" component={Videos} />
+        <Route path="/videos/:id" component={VideoDetail} />
+        <Route path="/categories" component={Categories} />
+        <Route path="/branding" component={Branding} />
+        <Route path="/feed-preview" component={FeedPreview} />
+        <Route path="/publishing" component={Publishing} />
+        <Route component={NotFound} />
+      </Switch>
+    </DashboardLayout>
   );
 }
-
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
           <Router />
