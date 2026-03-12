@@ -54,3 +54,14 @@
 ## Documentation
 - [x] Setup instructions in Publishing page
 - [x] Roku Direct Publisher integration guide
+
+## Bulk CSV Video Import
+- [x] Backend: CSV parse + validate procedure (title, streamUrl, thumbnailUrl, durationSeconds, contentType, contentRating, releaseDate, tags, channelSlug, categorySlug)
+- [x] Backend: Bulk insert procedure with duplicate slug detection and per-row error reporting
+- [x] Backend: CSV template download endpoint
+- [x] Frontend: Import page with drag-and-drop CSV upload
+- [x] Frontend: Parsed row preview table with per-row validation status
+- [x] Frontend: Channel + category assignment selector before import
+- [x] Frontend: Import progress and results summary (imported / skipped / errors)
+- [x] Navigation: Add "Import Videos" link to sidebar under Videos
+- [x] Tests: CSV parse and bulk import unit tests (11 tests passing)

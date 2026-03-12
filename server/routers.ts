@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { importRouter } from "./routers/import";
 import { z } from "zod";
 import {
   assignCategoryToChannel,
@@ -461,6 +462,8 @@ export const appRouter = router({
       }),
   }),
 
+  // ─── Import ─────────────────────────────────────────────────────────────────
+  import: importRouter,
   // ─── Feed ──────────────────────────────────────────────────────────────────
   feed: router({
     preview: adminProcedure

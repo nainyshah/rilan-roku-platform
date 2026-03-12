@@ -148,6 +148,12 @@ export async function getVideoById(id: number) {
   const result = await db.select().from(videos).where(eq(videos.id, id)).limit(1);
   return result[0];
 }
+export async function getVideoBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(videos).where(eq(videos.slug, slug)).limit(1);
+  return result[0];
+}
 
 export async function createVideo(data: typeof videos.$inferInsert) {
   const db = await getDb();
@@ -178,6 +184,12 @@ export async function getCategoryById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(categories).where(eq(categories.id, id)).limit(1);
+  return result[0];
+}
+export async function getCategoryBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(categories).where(eq(categories.slug, slug)).limit(1);
   return result[0];
 }
 

@@ -38,6 +38,7 @@ import {
   Send,
   Settings,
   Tv,
+  Upload,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -49,6 +50,7 @@ const contentMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: Tv, label: "Channels", path: "/channels" },
   { icon: Film, label: "Videos", path: "/videos" },
+  { icon: Upload, label: "Import Videos", path: "/import" },
   { icon: FolderOpen, label: "Categories", path: "/categories" },
 ];
 
