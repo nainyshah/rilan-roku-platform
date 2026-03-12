@@ -13,8 +13,10 @@ import {
   Copy,
   Eye,
   FileJson,
+  CalendarClock,
+  CalendarX2,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 export default function FeedPreview() {
   const { data: channels } = trpc.channels.list.useQuery({});
@@ -37,6 +39,26 @@ export default function FeedPreview() {
   const [activeTab, setActiveTab] = useState<"preview" | "raw">("preview");
 
   const selectedChannel = channels?.find((c) => c.id === selectedChannelId);
+
+  // Fetch channel videos to show schedule-filtered count
+  const { data: channelVideos } = trpc.channels.getVideos.useQuery(
+    { channelId: selectedChannelId! },
+    { enabled: !!selectedChannelId }
+  );
+
+  const scheduleStats = useMemo(() => {
+    if (!channelVideos) return null;
+    const now = new Date();
+    let alwaysOn = 0, liveWindow = 0, scheduled = 0, expired = 0;
+    for (const row of channelVideos) {
+      const { publishFrom, publishTo } = row.assignment;
+      if (!publishFrom && !publishTo) { alwaysOn++; continue; }
+      if (publishTo && now > publishTo) { expired++; continue; }
+      if (publishFrom && now < publishFrom) { scheduled++; continue; }
+      liveWindow++;
+    }
+    return { total: channelVideos.length, alwaysOn, liveWindow, scheduled, expired, activeInFeed: alwaysOn + liveWindow };
+  }, [channelVideos]);
 
   const previewMutation = trpc.feed.preview.useMutation({
     onSuccess: (data) => {
@@ -150,6 +172,56 @@ export default function FeedPreview() {
           )}
         </CardContent>
       </Card>
+
+      {/* Schedule Stats */}
+      {scheduleStats && selectedChannel && (
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarClock className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">Publish Window Summary</span>
+              <span className="text-xs text-muted-foreground">— {selectedChannel.name}</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="text-center p-2 bg-muted/50 rounded">
+                <p className="text-lg font-bold text-foreground">{scheduleStats.total}</p>
+                <p className="text-xs text-muted-foreground">Total Assigned</p>
+              </div>
+              <div className="text-center p-2 bg-emerald-500/10 rounded">
+                <p className="text-lg font-bold text-emerald-400">{scheduleStats.activeInFeed}</p>
+                <p className="text-xs text-muted-foreground">Active in Feed</p>
+              </div>
+              <div className="text-center p-2 bg-zinc-500/10 rounded">
+                <p className="text-lg font-bold text-zinc-400">{scheduleStats.alwaysOn}</p>
+                <p className="text-xs text-muted-foreground">Always On</p>
+              </div>
+              <div className="text-center p-2 bg-blue-500/10 rounded">
+                <p className="text-lg font-bold text-blue-400">{scheduleStats.scheduled}</p>
+                <p className="text-xs text-muted-foreground">Scheduled</p>
+              </div>
+              <div className="text-center p-2 bg-red-500/10 rounded">
+                <p className="text-lg font-bold text-red-400">{scheduleStats.expired}</p>
+                <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                  <CalendarX2 className="w-3 h-3" /> Expired
+                </p>
+              </div>
+            </div>
+            {scheduleStats.expired > 0 && (
+              <p className="text-xs text-amber-400 mt-2 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {scheduleStats.expired} video(s) have expired publish windows and will be excluded from the feed.
+                Update their schedule in the Channel Detail page.
+              </p>
+            )}
+            {scheduleStats.scheduled > 0 && (
+              <p className="text-xs text-blue-400 mt-1 flex items-center gap-1">
+                <CalendarClock className="w-3 h-3" />
+                {scheduleStats.scheduled} video(s) are scheduled but not yet live.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Validation Result */}
       {validationResult && (

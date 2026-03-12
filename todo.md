@@ -78,3 +78,13 @@
 - [x] Frontend: Delete log entry with confirmation
 - [x] Navigation: Add "Import History" link to sidebar
 - [x] Tests: Import log unit tests (10 tests passing)
+
+## Scheduled Publish Windows
+- [x] Backend: Feed generator filters channel_videos by publishFrom/publishTo (UTC now)
+- [x] Backend: tRPC procedure to set/clear publishFrom + publishTo on a channel_video assignment
+- [x] Backend: tRPC query to get schedule for a specific channel_video assignment
+- [x] Frontend: Date-range picker component on ChannelDetail video assignment rows
+- [x] Frontend: Show active schedule badge (Scheduled / Expires) on assigned video rows
+- [x] Frontend: Schedule indicator on Videos list page (shows if video has any active schedule)
+- [x] Frontend: Feed Preview shows schedule-filtered video count vs total
+- [x] Tests: Schedule filter unit tests (9 tests passing, 54 total)

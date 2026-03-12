@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { Plus, Search, Film, AlertTriangle, CheckCircle, Clock, FileText, Edit, Trash2, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { Plus, Search, Film, AlertTriangle, CheckCircle, Clock, FileText, Edit, Trash2, ShieldCheck, CalendarClock, CalendarX2, CalendarCheck2 } from "lucide-react";
+import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 
 function StatusBadge({ status }: { status: string }) {
@@ -42,6 +43,43 @@ function ValidationBadge({ status }: { status: string | null }) {
   );
 }
 
+function ScheduleIndicator({ videoId, scheduleMap }: { videoId: number; scheduleMap: Map<number, { hasSchedule: boolean; allExpired: boolean; anyLive: boolean; anyScheduled: boolean }> }) {
+  const info = scheduleMap.get(videoId);
+  if (!info || !info.hasSchedule) return <span className="text-xs text-muted-foreground">—</span>;
+  if (info.allExpired)
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1 text-xs text-red-400 cursor-default">
+            <CalendarX2 className="w-3.5 h-3.5" /> Expired
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>All channel publish windows have expired</TooltipContent>
+      </Tooltip>
+    );
+  if (info.anyScheduled && !info.anyLive)
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex items-center gap-1 text-xs text-blue-400 cursor-default">
+            <CalendarClock className="w-3.5 h-3.5" /> Scheduled
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Scheduled to go live in a future window</TooltipContent>
+      </Tooltip>
+    );
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex items-center gap-1 text-xs text-emerald-400 cursor-default">
+          <CalendarCheck2 className="w-3.5 h-3.5" /> Live window
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>Currently within an active publish window</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export default function Videos() {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
@@ -64,6 +102,18 @@ export default function Videos() {
     onSuccess: (r) => { toast.success(`Validation: ${r.status}`); refetch(); },
     onError: (e) => toast.error(e.message),
   });
+
+  // Fetch schedule summary for the current page of videos
+  const videoIds = useMemo(() => data?.items.map((v) => v.id) ?? [], [data?.items]);
+  const { data: scheduleData } = trpc.videos.scheduleSummary.useQuery(
+    { videoIds },
+    { enabled: videoIds.length > 0 }
+  );
+  const scheduleMap = useMemo(() => {
+    const m = new Map<number, { hasSchedule: boolean; allExpired: boolean; anyLive: boolean; anyScheduled: boolean }>();
+    for (const s of scheduleData ?? []) m.set(s.videoId, s);
+    return m;
+  }, [scheduleData]);
 
   const totalPages = Math.ceil((data?.total ?? 0) / 20);
 
@@ -133,6 +183,7 @@ export default function Videos() {
                     <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden md:table-cell">Type</th>
                     <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3">Status</th>
                     <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden lg:table-cell">Validation</th>
+                    <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden xl:table-cell">Schedule</th>
                     <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden lg:table-cell">Duration</th>
                     <th className="text-right text-xs text-muted-foreground font-medium px-4 py-3">Actions</th>
                   </tr>
@@ -161,6 +212,9 @@ export default function Videos() {
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell">
                         <ValidationBadge status={video.validationStatus} />
+                      </td>
+                      <td className="px-4 py-3 hidden xl:table-cell">
+                        <ScheduleIndicator videoId={video.id} scheduleMap={scheduleMap} />
                       </td>
                       <td className="px-4 py-3 hidden lg:table-cell">
                         <span className="text-xs text-muted-foreground">

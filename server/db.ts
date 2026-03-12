@@ -148,6 +148,50 @@ export async function getVideoById(id: number) {
   const result = await db.select().from(videos).where(eq(videos.id, id)).limit(1);
   return result[0];
 }
+/**
+ * Returns videos with their channel assignment schedule data.
+ * For each video, returns the earliest publishFrom and latest publishTo across all channel assignments.
+ */
+export async function getVideosWithScheduleSummary(videoIds: number[]) {
+  if (videoIds.length === 0) return [];
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      videoId: channelVideos.videoId,
+      publishFrom: channelVideos.publishFrom,
+      publishTo: channelVideos.publishTo,
+      channelId: channelVideos.channelId,
+      assignmentId: channelVideos.id,
+    })
+    .from(channelVideos)
+    .where(inArray(channelVideos.videoId, videoIds));
+  // Group by videoId — a video may be in multiple channels
+  const map = new Map<number, { hasSchedule: boolean; allExpired: boolean; anyLive: boolean; anyScheduled: boolean }>();
+  const now = new Date();
+  for (const row of rows) {
+    const existing = map.get(row.videoId) ?? { hasSchedule: false, allExpired: true, anyLive: false, anyScheduled: false };
+    if (row.publishFrom || row.publishTo) {
+      existing.hasSchedule = true;
+      const from = row.publishFrom;
+      const to = row.publishTo;
+      if (to && now > to) {
+        // expired — allExpired stays true
+      } else if (from && now < from) {
+        existing.anyScheduled = true;
+        existing.allExpired = false;
+      } else {
+        existing.anyLive = true;
+        existing.allExpired = false;
+      }
+    } else {
+      existing.allExpired = false;
+    }
+    map.set(row.videoId, existing);
+  }
+  return Array.from(map.entries()).map(([videoId, info]) => ({ videoId, ...info }));
+}
+
 export async function getVideoBySlug(slug: string) {
   const db = await getDb();
   if (!db) return undefined;

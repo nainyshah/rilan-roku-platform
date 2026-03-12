@@ -22,6 +22,7 @@ import {
   getVideoById,
   getVideoCategoriesForVideo,
   getVideos,
+  getVideosWithScheduleSummary,
   removeCategoryFromChannel,
   removeVideoFromChannel,
   setVideoCategories,
@@ -251,6 +252,45 @@ export const appRouter = router({
         await updateChannelCategoryRow(id, data);
         return { success: true };
       }),
+
+    /**
+     * Set or clear the publish window (publishFrom / publishTo) on a channel_video assignment.
+     * Pass null to clear either date.
+     */
+    setSchedule: adminProcedure
+      .input(
+        z.object({
+          /** channel_videos.id (the assignment row id, not the video id) */
+          assignmentId: z.number(),
+          /** ISO-8601 datetime string or null to clear */
+          publishFrom: z.string().datetime().nullable().optional(),
+          /** ISO-8601 datetime string or null to clear */
+          publishTo: z.string().datetime().nullable().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        await updateChannelVideoAssignment(input.assignmentId, {
+          publishFrom: input.publishFrom === null ? null : input.publishFrom ? new Date(input.publishFrom) : undefined,
+          publishTo: input.publishTo === null ? null : input.publishTo ? new Date(input.publishTo) : undefined,
+        });
+        return { success: true };
+      }),
+
+    /**
+     * Get the current schedule for a specific channel_video assignment.
+     * Returns the assignment's publishFrom and publishTo timestamps.
+     */
+    getSchedule: adminProcedure
+      .input(z.object({ channelId: z.number() }))
+      .query(async ({ input }) => {
+        const rows = await getChannelVideos(input.channelId);
+        return rows.map((r) => ({
+          assignmentId: r.assignment.id,
+          videoId: r.assignment.videoId,
+          publishFrom: r.assignment.publishFrom ?? null,
+          publishTo: r.assignment.publishTo ?? null,
+        }));
+      }),
   }),
 
   // ─── Videos ────────────────────────────────────────────────────────────────
@@ -373,6 +413,16 @@ export const appRouter = router({
           validationErrors: result.issues,
         });
         return result;
+      }),
+
+    /**
+     * Returns schedule summary for a list of video IDs.
+     * Used by the Videos list page to show schedule indicators.
+     */
+    scheduleSummary: adminProcedure
+      .input(z.object({ videoIds: z.array(z.number()) }))
+      .query(async ({ input }) => {
+        return getVideosWithScheduleSummary(input.videoIds);
       }),
   }),
 
