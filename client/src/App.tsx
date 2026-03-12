@@ -15,6 +15,7 @@ import Branding from "./pages/Branding";
 import FeedPreview from "./pages/FeedPreview";
 import Publishing from "./pages/Publishing";
 import ImportVideos from "./pages/ImportVideos";
+import ImportHistory from "./pages/ImportHistory";
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
         <Route path="/feed-preview" component={FeedPreview} />
         <Route path="/publishing" component={Publishing} />
         <Route path="/import" component={ImportVideos} />
+        <Route path="/import/history" component={ImportHistory} />
         <Route component={NotFound} />
       </Switch>
     </DashboardLayout>

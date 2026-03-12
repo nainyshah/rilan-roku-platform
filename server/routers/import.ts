@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import Papa from "papaparse";
+import { desc, eq } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
   createVideo,
@@ -11,18 +12,22 @@ import {
   setVideoCategories,
   getDb,
 } from "../db";
-import { videos } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { importLogs, videos } from "../../drizzle/schema";
+import { storagePut } from "../storage";
 
 // ─── Role guard ───────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin" && ctx.user.role !== "content_manager" && ctx.user.role !== "publishing_manager") {
+  if (
+    ctx.user.role !== "admin" &&
+    ctx.user.role !== "content_manager" &&
+    ctx.user.role !== "publishing_manager"
+  ) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
   }
   return next({ ctx });
 });
 
-// ─── Slug helper ──────────────────────────────────────────────────────────────
+// ─── Slug helpers ─────────────────────────────────────────────────────────────
 function slugify(str: string): string {
   return str
     .toLowerCase()
@@ -34,6 +39,10 @@ function makeUniqueSlug(base: string, suffix: number): string {
   return suffix === 0 ? base : `${base}-${suffix}`;
 }
 
+function randomSuffix(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
+
 // ─── CSV row schema ───────────────────────────────────────────────────────────
 const csvRowSchema = z.object({
   title: z.string().min(1, "title is required"),
@@ -42,16 +51,12 @@ const csvRowSchema = z.object({
   streamUrl: z.string().url("streamUrl must be a valid URL").optional().or(z.literal("")),
   durationSeconds: z.coerce.number().int().nonnegative().optional(),
   language: z.string().optional(),
-  contentType: z
-    .enum(["movie", "series", "episode", "short", "clip", "special"])
-    .optional(),
+  contentType: z.enum(["movie", "series", "episode", "short", "clip", "special"]).optional(),
   contentRating: z.string().optional(),
   releaseDate: z.string().optional(),
   rightsOwner: z.string().optional(),
-  tags: z.string().optional(), // comma-separated
-  publishStatus: z
-    .enum(["draft", "pending", "approved", "published", "archived"])
-    .optional(),
+  tags: z.string().optional(),
+  publishStatus: z.enum(["draft", "pending", "approved", "published", "archived"]).optional(),
   channelSlug: z.string().optional(),
   categorySlug: z.string().optional(),
 });
@@ -83,13 +88,10 @@ export function parseCsvText(csvText: string): { rows: ParsedRow[]; headers: str
     }
     const data = parsed.data;
     const issues: string[] = [];
-
-    // Warnings for recommended fields
     if (!data.thumbnailUrl) issues.push("thumbnailUrl missing (recommended)");
     if (!data.streamUrl) issues.push("streamUrl missing (recommended)");
     if (!data.durationSeconds) issues.push("durationSeconds missing (recommended)");
     if (!data.description) issues.push("description missing (recommended)");
-
     return {
       rowIndex: i + 1,
       data,
@@ -105,11 +107,7 @@ export function parseCsvText(csvText: string): { rows: ParsedRow[]; headers: str
 export const importRouter = router({
   /** Parse CSV text and return per-row validation results without writing to DB */
   parsePreview: adminProcedure
-    .input(
-      z.object({
-        csvText: z.string().min(1, "CSV content is required"),
-      })
-    )
+    .input(z.object({ csvText: z.string().min(1, "CSV content is required") }))
     .mutation(async ({ input }) => {
       const { rows, headers } = parseCsvText(input.csvText);
       const validCount = rows.filter((r) => r.status === "valid").length;
@@ -118,22 +116,33 @@ export const importRouter = router({
       return { rows, headers, validCount, warningCount, errorCount, total: rows.length };
     }),
 
-  /** Bulk import parsed rows into the database */
+  /** Bulk import parsed rows into the database and persist an import log */
   bulkImport: adminProcedure
     .input(
       z.object({
         csvText: z.string().min(1),
-        /** Override channel slug for all rows (optional — row-level channelSlug takes precedence) */
+        filename: z.string().default("import.csv"),
         defaultChannelSlug: z.string().optional(),
-        /** Override category slug for all rows (optional — row-level categorySlug takes precedence) */
         defaultCategorySlug: z.string().optional(),
-        /** Skip rows with errors instead of aborting */
         skipErrors: z.boolean().default(true),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { rows } = parseCsvText(input.csvText);
 
+      // ── Upload original CSV to S3 ──────────────────────────────────────────
+      let csvS3Key: string | null = null;
+      let csvUrl: string | null = null;
+      try {
+        const key = `import-logs/${Date.now()}-${randomSuffix()}-${input.filename}`;
+        const uploaded = await storagePut(key, Buffer.from(input.csvText, "utf-8"), "text/csv");
+        csvS3Key = uploaded.key;
+        csvUrl = uploaded.url;
+      } catch (err) {
+        console.warn("[Import] Failed to upload CSV to S3:", err);
+      }
+
+      // ── Process rows ──────────────────────────────────────────────────────
       const results: Array<{
         rowIndex: number;
         title: string;
@@ -148,7 +157,6 @@ export const importRouter = router({
       let errorCount = 0;
 
       for (const row of rows) {
-        // Skip hard-error rows if configured
         if (row.status === "error" && input.skipErrors) {
           results.push({
             rowIndex: row.rowIndex,
@@ -162,10 +170,10 @@ export const importRouter = router({
 
         const data = row.data;
         const baseSlug = slugify(data.title);
-
-        // Duplicate slug detection — find a unique slug
         let slug = baseSlug;
         let suffix = 0;
+        let isDuplicate = false;
+
         while (true) {
           const existing = await getVideoBySlug(slug);
           if (!existing) break;
@@ -179,17 +187,17 @@ export const importRouter = router({
               reason: `Could not generate unique slug for "${data.title}"`,
             });
             duplicateCount++;
-            continue;
+            isDuplicate = true;
+            break;
           }
         }
+        if (isDuplicate) continue;
 
         try {
-          // Parse tags
           const tags = data.tags
             ? data.tags.split(",").map((t) => t.trim()).filter(Boolean)
             : [];
 
-          // Create the video
           await createVideo({
             title: data.title,
             slug,
@@ -206,7 +214,6 @@ export const importRouter = router({
             tags: tags.length > 0 ? tags : null,
           });
 
-          // Fetch the newly created video ID
           const db = await getDb();
           if (!db) throw new Error("DB unavailable");
           const [created] = await db.select().from(videos).where(eq(videos.slug, slug)).limit(1);
@@ -214,20 +221,15 @@ export const importRouter = router({
 
           const videoId = created.id;
 
-          // Resolve channel
           const channelSlug = data.channelSlug || input.defaultChannelSlug;
           if (channelSlug) {
             const channel = await getChannelBySlug(channelSlug);
             if (channel) {
               await assignVideoToChannel({ channelId: channel.id, videoId });
-
-              // Resolve category
               const categorySlug = data.categorySlug || input.defaultCategorySlug;
               if (categorySlug) {
                 const category = await getCategoryBySlug(categorySlug);
-                if (category) {
-                  await setVideoCategories(videoId, [category.id]);
-                }
+                if (category) await setVideoCategories(videoId, [category.id]);
               }
             }
           }
@@ -245,50 +247,86 @@ export const importRouter = router({
         }
       }
 
-      return {
-        results,
-        importedCount,
-        skippedCount,
-        duplicateCount,
-        errorCount,
-        total: rows.length,
-      };
+      // ── Persist import log ────────────────────────────────────────────────
+      const db = await getDb();
+      if (db) {
+        try {
+          await db.insert(importLogs).values({
+            filename: input.filename,
+            csvS3Key,
+            csvUrl,
+            totalRows: rows.length,
+            importedCount,
+            skippedCount,
+            duplicateCount,
+            errorCount,
+            resultsJson: results,
+            defaultChannelSlug: input.defaultChannelSlug ?? null,
+            defaultCategorySlug: input.defaultCategorySlug ?? null,
+            importedBy: ctx.user.id,
+            importedByName: ctx.user.name ?? ctx.user.email ?? "Unknown",
+          });
+        } catch (err) {
+          console.warn("[Import] Failed to save import log:", err);
+        }
+      }
+
+      return { results, importedCount, skippedCount, duplicateCount, errorCount, total: rows.length };
     }),
 
   /** Return the CSV template as a string */
   getTemplate: adminProcedure.query(() => {
     const headers = [
-      "title",
-      "description",
-      "thumbnailUrl",
-      "streamUrl",
-      "durationSeconds",
-      "language",
-      "contentType",
-      "contentRating",
-      "releaseDate",
-      "rightsOwner",
-      "tags",
-      "publishStatus",
-      "channelSlug",
-      "categorySlug",
+      "title", "description", "thumbnailUrl", "streamUrl", "durationSeconds",
+      "language", "contentType", "contentRating", "releaseDate", "rightsOwner",
+      "tags", "publishStatus", "channelSlug", "categorySlug",
     ];
     const example = [
-      "My Awesome Video",
-      "A short description of the video",
-      "https://example.com/thumb.jpg",
-      "https://example.com/video.mp4",
-      "120",
-      "en",
-      "clip",
-      "all",
-      "2024-01-15",
-      "RILAN GAMES LLC",
-      "gaming,action",
-      "draft",
-      "shorts-tv",
-      "featured",
+      "My Awesome Video", "A short description of the video",
+      "https://example.com/thumb.jpg", "https://example.com/video.mp4",
+      "120", "en", "clip", "all", "2024-01-15", "RILAN GAMES LLC",
+      "gaming,action", "draft", "shorts-tv", "featured",
     ];
     return [headers.join(","), example.join(",")].join("\n");
   }),
+
+  // ─── Import Log management ──────────────────────────────────────────────────
+
+  /** List all import logs, newest first */
+  listLogs: adminProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200).default(50) }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { logs: [], total: 0 };
+      const limit = input?.limit ?? 50;
+      const rows = await db
+        .select()
+        .from(importLogs)
+        .orderBy(desc(importLogs.createdAt))
+        .limit(limit);
+      return { logs: rows, total: rows.length };
+    }),
+
+  /** Get a single import log by ID (includes full resultsJson) */
+  getLog: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [log] = await db.select().from(importLogs).where(eq(importLogs.id, input.id)).limit(1);
+      if (!log) throw new TRPCError({ code: "NOT_FOUND", message: "Import log not found" });
+      return log;
+    }),
+
+  /** Delete an import log record (does NOT delete the videos that were imported) */
+  deleteLog: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [log] = await db.select().from(importLogs).where(eq(importLogs.id, input.id)).limit(1);
+      if (!log) throw new TRPCError({ code: "NOT_FOUND", message: "Import log not found" });
+      await db.delete(importLogs).where(eq(importLogs.id, input.id));
+      return { success: true };
+    }),
 });

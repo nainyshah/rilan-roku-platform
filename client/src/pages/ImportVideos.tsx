@@ -38,6 +38,7 @@ import {
   ChevronUp,
   Loader2,
   ArrowLeft,
+  History as HistoryIcon,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -210,6 +211,7 @@ export default function ImportVideos() {
     if (!csvText) return;
     importMutation.mutate({
       csvText,
+      filename: fileName || "import.csv",
       defaultChannelSlug: defaultChannelSlug === "none" ? undefined : defaultChannelSlug,
       defaultCategorySlug: defaultCategorySlug === "none" ? undefined : defaultCategorySlug,
       skipErrors,
@@ -260,6 +262,12 @@ export default function ImportVideos() {
               Upload a CSV file to import multiple videos at once into your Roku channels.
             </p>
           </div>
+          <Link href="/import/history">
+            <Button variant="outline" size="sm" className="gap-2">
+              <HistoryIcon className="w-4 h-4" />
+              View History
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={downloadTemplate} className="gap-2">
             <Download className="w-4 h-4" />
             Download Template

@@ -65,3 +65,16 @@
 - [x] Frontend: Import progress and results summary (imported / skipped / errors)
 - [x] Navigation: Add "Import Videos" link to sidebar under Videos
 - [x] Tests: CSV parse and bulk import unit tests (11 tests passing)
+
+## Import History Log
+- [x] DB: Add import_logs table (id, filename, csvS3Key, csvUrl, importedCount, skippedCount, duplicateCount, errorCount, totalRows, resultsJson, importedBy, createdAt)
+- [x] DB: Generate and apply migration SQL
+- [x] Backend: Store original CSV to S3 on every bulkImport call
+- [x] Backend: Write import log record after each bulk import
+- [x] Backend: tRPC procedures — list, getById, delete import logs
+- [x] Backend: Signed/direct CSV re-download URL from S3
+- [x] Frontend: Import History page with sortable log table
+- [x] Frontend: Log detail drawer (per-row results, re-download CSV button)
+- [x] Frontend: Delete log entry with confirmation
+- [x] Navigation: Add "Import History" link to sidebar
+- [x] Tests: Import log unit tests (10 tests passing)

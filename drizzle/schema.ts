@@ -146,3 +146,33 @@ export const assets = mysqlTable("assets", {
 
 export type Asset = typeof assets.$inferSelect;
 export type InsertAsset = typeof assets.$inferInsert;
+
+// ─── Import Logs ──────────────────────────────────────────────────────────────
+export const importLogs = mysqlTable("import_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Original filename uploaded by the user */
+  filename: varchar("filename", { length: 500 }).notNull(),
+  /** S3 key for the stored original CSV file */
+  csvS3Key: text("csvS3Key"),
+  /** Public/presigned URL to download the original CSV */
+  csvUrl: text("csvUrl"),
+  /** Summary counts */
+  totalRows: int("totalRows").notNull().default(0),
+  importedCount: int("importedCount").notNull().default(0),
+  skippedCount: int("skippedCount").notNull().default(0),
+  duplicateCount: int("duplicateCount").notNull().default(0),
+  errorCount: int("errorCount").notNull().default(0),
+  /** Full per-row results JSON array */
+  resultsJson: json("resultsJson"),
+  /** Default channel slug used during this import (if any) */
+  defaultChannelSlug: varchar("defaultChannelSlug", { length: 255 }),
+  /** Default category slug used during this import (if any) */
+  defaultCategorySlug: varchar("defaultCategorySlug", { length: 255 }),
+  /** User who triggered the import */
+  importedBy: int("importedBy"),
+  importedByName: varchar("importedByName", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ImportLog = typeof importLogs.$inferSelect;
+export type InsertImportLog = typeof importLogs.$inferInsert;

@@ -29,6 +29,7 @@ import {
   BarChart3,
   Film,
   FolderOpen,
+  History as HistoryIcon,
   Image,
   LayoutDashboard,
   LogOut,
@@ -51,6 +52,7 @@ const contentMenuItems = [
   { icon: Tv, label: "Channels", path: "/channels" },
   { icon: Film, label: "Videos", path: "/videos" },
   { icon: Upload, label: "Import Videos", path: "/import" },
+  { icon: HistoryIcon, label: "Import History", path: "/import/history" },
   { icon: FolderOpen, label: "Categories", path: "/categories" },
 ];
 
