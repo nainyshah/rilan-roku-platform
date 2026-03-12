@@ -14,6 +14,7 @@ import {
 } from "../db";
 import { importLogs, videos } from "../../drizzle/schema";
 import { storagePut } from "../storage";
+import { checkThumbnailUrls, type ThumbnailCheckResult } from "../thumbnailValidator";
 
 // ─── Role guard ───────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -69,6 +70,7 @@ export interface ParsedRow {
   data: CsvRowInput;
   status: "valid" | "warning" | "error";
   issues: string[];
+  thumbnailCheck?: ThumbnailCheckResult;
 }
 
 export function parseCsvText(csvText: string): { rows: ParsedRow[]; headers: string[] } {
@@ -107,13 +109,72 @@ export function parseCsvText(csvText: string): { rows: ParsedRow[]; headers: str
 export const importRouter = router({
   /** Parse CSV text and return per-row validation results without writing to DB */
   parsePreview: adminProcedure
-    .input(z.object({ csvText: z.string().min(1, "CSV content is required") }))
+    .input(
+      z.object({
+        csvText: z.string().min(1, "CSV content is required"),
+        /** When true, run HTTP HEAD checks on thumbnail URLs (adds latency) */
+        validateThumbnails: z.boolean().default(true),
+      })
+    )
     .mutation(async ({ input }) => {
       const { rows, headers } = parseCsvText(input.csvText);
+
+      // ── Thumbnail URL validation ─────────────────────────────────────────
+      let thumbnailWarningCount = 0;
+      let thumbnailChecks: Map<string, ThumbnailCheckResult> = new Map();
+
+      if (input.validateThumbnails) {
+        // Only check rows that passed schema validation and have a thumbnailUrl
+        const urlsToCheck = rows
+          .filter((r) => r.status !== "error" && r.data.thumbnailUrl)
+          .map((r) => r.data.thumbnailUrl as string);
+
+        if (urlsToCheck.length > 0) {
+          thumbnailChecks = await checkThumbnailUrls(urlsToCheck);
+        }
+
+        // Attach check results to rows
+        for (const row of rows) {
+          if (row.status === "error") continue; // skip already-errored rows
+          if (!row.data.thumbnailUrl) continue;
+
+          const check = thumbnailChecks.get(row.data.thumbnailUrl);
+          if (check) {
+            row.thumbnailCheck = check;
+            if (check.isWarning) {
+              thumbnailWarningCount++;
+              // Escalate row status to warning if it was previously valid
+              if (row.status === "valid") {
+                row.status = "warning";
+              }
+              // Add thumbnail warning to issues list
+              if (!row.issues.includes(check.message)) {
+                row.issues.push(`Thumbnail: ${check.message}`);
+              }
+            }
+          }
+        }
+      }
+
       const validCount = rows.filter((r) => r.status === "valid").length;
       const warningCount = rows.filter((r) => r.status === "warning").length;
       const errorCount = rows.filter((r) => r.status === "error").length;
-      return { rows, headers, validCount, warningCount, errorCount, total: rows.length };
+
+      return {
+        rows,
+        headers,
+        validCount,
+        warningCount,
+        errorCount,
+        total: rows.length,
+        thumbnailValidation: input.validateThumbnails
+          ? {
+              checked: thumbnailChecks.size,
+              warnings: thumbnailWarningCount,
+              skipped: rows.filter((r) => r.status !== "error" && !r.data.thumbnailUrl).length,
+            }
+          : null,
+      };
     }),
 
   /** Bulk import parsed rows into the database and persist an import log */

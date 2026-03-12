@@ -39,15 +39,35 @@ import {
   Loader2,
   ArrowLeft,
   History as HistoryIcon,
+  ImageOff,
+  Image,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Link } from "wouter";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+interface ThumbnailCheck {
+  url: string;
+  status: string;
+  httpStatus?: number;
+  contentType?: string;
+  message: string;
+  isWarning: boolean;
+}
+
 interface ParsedRow {
   rowIndex: number;
   data: Record<string, string | number | undefined>;
   status: "valid" | "warning" | "error";
   issues: string[];
+  thumbnailCheck?: ThumbnailCheck;
+}
+
+interface ThumbnailValidationSummary {
+  checked: number;
+  warnings: number;
+  skipped: number;
 }
 
 interface ImportResult {
@@ -89,6 +109,38 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Thumbnail status icon ────────────────────────────────────────────────────
+function ThumbnailStatusCell({ check }: { check?: ThumbnailCheck }) {
+  if (!check) return <span className="text-muted-foreground text-xs">—</span>;
+  if (!check.isWarning)
+    return (
+      <span title="Thumbnail OK" className="flex items-center gap-1 text-xs text-emerald-400">
+        <Image className="w-3.5 h-3.5" />
+        OK
+      </span>
+    );
+  const label =
+    check.status === "not_found"
+      ? "404"
+      : check.status === "timeout"
+      ? "Timeout"
+      : check.status === "forbidden"
+      ? "403"
+      : check.status === "bad_content"
+      ? "Not image"
+      : check.status === "invalid_url"
+      ? "Bad URL"
+      : check.status === "server_error"
+      ? `${check.httpStatus ?? "5xx"}`
+      : "Error";
+  return (
+    <span title={check.message} className="flex items-center gap-1 text-xs text-amber-400 cursor-help">
+      <ImageOff className="w-3.5 h-3.5" />
+      {label}
+    </span>
+  );
+}
+
 // ─── Expandable issues cell ───────────────────────────────────────────────────
 function IssuesCell({ issues }: { issues: string[] }) {
   const [open, setOpen] = useState(false);
@@ -125,6 +177,8 @@ export default function ImportVideos() {
   const [defaultChannelSlug, setDefaultChannelSlug] = useState<string>("none");
   const [defaultCategorySlug, setDefaultCategorySlug] = useState<string>("none");
   const [skipErrors, setSkipErrors] = useState(true);
+  const [validateThumbnails, setValidateThumbnails] = useState(true);
+  const [thumbnailSummary, setThumbnailSummary] = useState<ThumbnailValidationSummary | null>(null);
   const [reimportBanner, setReimportBanner] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -153,6 +207,7 @@ export default function ImportVideos() {
     setFileName(reimportData.filename);
     setParsedRows(null);
     setImportResults(null);
+    setThumbnailSummary(null);
     if (reimportData.defaultChannelSlug) setDefaultChannelSlug(reimportData.defaultChannelSlug);
     if (reimportData.defaultCategorySlug) setDefaultCategorySlug(reimportData.defaultCategorySlug);
     setReimportBanner(reimportData.filename);
@@ -168,7 +223,14 @@ export default function ImportVideos() {
     onSuccess: (data) => {
       setParsedRows(data.rows as ParsedRow[]);
       setImportResults(null);
-      toast.success(`Parsed ${data.total} rows — ${data.validCount} valid, ${data.warningCount} warnings, ${data.errorCount} errors`);
+      setThumbnailSummary(data.thumbnailValidation ?? null);
+      const thumbMsg =
+        data.thumbnailValidation?.warnings
+          ? ` — ${data.thumbnailValidation.warnings} thumbnail warning${data.thumbnailValidation.warnings > 1 ? "s" : ""}`
+          : "";
+      toast.success(
+        `Parsed ${data.total} rows — ${data.validCount} valid, ${data.warningCount} warnings, ${data.errorCount} errors${thumbMsg}`
+      );
     },
     onError: (err) => toast.error(`Parse failed: ${err.message}`),
   });
@@ -196,6 +258,7 @@ export default function ImportVideos() {
       setCsvText(text);
       setParsedRows(null);
       setImportResults(null);
+      setThumbnailSummary(null);
     };
     reader.readAsText(file);
   }, []);
@@ -236,7 +299,7 @@ export default function ImportVideos() {
   // ─── Parse ──────────────────────────────────────────────────────────────────
   const handleParse = () => {
     if (!csvText) return;
-    parseMutation.mutate({ csvText });
+    parseMutation.mutate({ csvText, validateThumbnails });
   };
 
   // ─── Import ─────────────────────────────────────────────────────────────────
@@ -257,6 +320,7 @@ export default function ImportVideos() {
     setFileName("");
     setParsedRows(null);
     setImportResults(null);
+    setThumbnailSummary(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -278,6 +342,9 @@ export default function ImportVideos() {
       }
     : null;
 
+  // Whether any row has a thumbnail check result (to show the column)
+  const hasThumbnailChecks = parsedRows?.some((r) => r.thumbnailCheck !== undefined) ?? false;
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6 max-w-6xl">
@@ -294,14 +361,16 @@ export default function ImportVideos() {
           <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
             <div className="flex items-center gap-2 text-amber-400 text-sm">
               <HistoryIcon className="w-4 h-4" />
-              <span>Re-importing from: <span className="font-mono font-medium">{reimportBanner}</span></span>
+              <span>
+                Re-importing from:{" "}
+                <span className="font-mono font-medium">{reimportBanner}</span>
+              </span>
             </div>
             <button
               onClick={() => {
                 setReimportBanner(null);
                 handleReset();
-                // Clear the query param without navigation
-                window.history.replaceState({}, "", window.location.pathname);
+                window.history.replaceState({}, "", "/import");
               }}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -340,11 +409,15 @@ export default function ImportVideos() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-bold">1</span>
+              <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-bold">
+                1
+              </span>
               Upload CSV File
             </CardTitle>
             <CardDescription>
-              Upload a CSV with columns: title, description, thumbnailUrl, streamUrl, durationSeconds, language, contentType, contentRating, releaseDate, rightsOwner, tags, publishStatus, channelSlug, categorySlug
+              Upload a CSV with columns: title, description, thumbnailUrl, streamUrl,
+              durationSeconds, language, contentType, contentRating, releaseDate, rightsOwner,
+              tags, publishStatus, channelSlug, categorySlug
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -386,7 +459,7 @@ export default function ImportVideos() {
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <Button
                 onClick={handleParse}
                 disabled={!csvText || parseMutation.isPending}
@@ -397,7 +470,11 @@ export default function ImportVideos() {
                 ) : (
                   <FileText className="w-4 h-4" />
                 )}
-                Parse & Validate
+                {parseMutation.isPending
+                  ? validateThumbnails
+                    ? "Validating thumbnails…"
+                    : "Parsing…"
+                  : "Parse & Validate"}
               </Button>
               {csvText && (
                 <Button variant="outline" onClick={handleReset} className="gap-2">
@@ -405,16 +482,64 @@ export default function ImportVideos() {
                   Reset
                 </Button>
               )}
+              {/* Thumbnail validation toggle */}
+              <label className="flex items-center gap-2 cursor-pointer select-none ml-auto">
+                <input
+                  type="checkbox"
+                  checked={validateThumbnails}
+                  onChange={(e) => setValidateThumbnails(e.target.checked)}
+                  className="w-4 h-4 accent-primary"
+                />
+                <span className="text-sm flex items-center gap-1.5">
+                  {validateThumbnails ? (
+                    <Eye className="w-3.5 h-3.5 text-primary" />
+                  ) : (
+                    <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+                  )}
+                  Check thumbnail URLs
+                  <span className="text-muted-foreground text-xs">(adds ~5s per batch)</span>
+                </span>
+              </label>
             </div>
           </CardContent>
         </Card>
+
+        {/* Thumbnail validation summary banners */}
+        {thumbnailSummary && thumbnailSummary.warnings > 0 && (
+          <div className="flex items-start gap-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+            <ImageOff className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-400">
+                {thumbnailSummary.warnings} thumbnail URL
+                {thumbnailSummary.warnings > 1 ? "s" : ""} may be broken
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {thumbnailSummary.checked} URLs checked — {thumbnailSummary.warnings} returned
+                warnings (not found, wrong content-type, timeout, or server error). These rows are
+                flagged as warnings. You can still import them, but the thumbnails may not display
+                correctly in Roku.
+              </p>
+            </div>
+          </div>
+        )}
+        {thumbnailSummary && thumbnailSummary.warnings === 0 && thumbnailSummary.checked > 0 && (
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+            <Image className="w-4 h-4 text-emerald-400" />
+            <p className="text-sm text-emerald-400">
+              All {thumbnailSummary.checked} thumbnail URL
+              {thumbnailSummary.checked > 1 ? "s" : ""} verified successfully.
+            </p>
+          </div>
+        )}
 
         {/* Step 2: Preview & Configure */}
         {parsedRows && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-bold">2</span>
+                <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-bold">
+                  2
+                </span>
                 Preview & Configure Import
               </CardTitle>
               <CardDescription>
@@ -448,7 +573,9 @@ export default function ImportVideos() {
               <div className="grid grid-cols-2 gap-4 p-4 rounded-lg border bg-muted/20">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">Default Channel</label>
-                  <p className="text-xs text-muted-foreground">Applied when row has no channelSlug</p>
+                  <p className="text-xs text-muted-foreground">
+                    Applied when row has no channelSlug
+                  </p>
                   <Select value={defaultChannelSlug} onValueChange={setDefaultChannelSlug}>
                     <SelectTrigger>
                       <SelectValue placeholder="No default channel" />
@@ -465,7 +592,9 @@ export default function ImportVideos() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">Default Category</label>
-                  <p className="text-xs text-muted-foreground">Applied when row has no categorySlug</p>
+                  <p className="text-xs text-muted-foreground">
+                    Applied when row has no categorySlug
+                  </p>
                   <Select value={defaultCategorySlug} onValueChange={setDefaultCategorySlug}>
                     <SelectTrigger>
                       <SelectValue placeholder="No default category" />
@@ -492,7 +621,9 @@ export default function ImportVideos() {
                 />
                 <span className="text-sm">
                   Skip rows with errors{" "}
-                  <span className="text-muted-foreground">(uncheck to abort on first error)</span>
+                  <span className="text-muted-foreground">
+                    (uncheck to abort on first error)
+                  </span>
                 </span>
               </label>
 
@@ -508,6 +639,7 @@ export default function ImportVideos() {
                         <TableHead>Duration</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Channel</TableHead>
+                        {hasThumbnailChecks && <TableHead>Thumbnail</TableHead>}
                         <TableHead>Status</TableHead>
                         <TableHead>Issues</TableHead>
                       </TableRow>
@@ -524,7 +656,9 @@ export default function ImportVideos() {
                               : ""
                           }
                         >
-                          <TableCell className="text-muted-foreground text-xs">{row.rowIndex}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                            {row.rowIndex}
+                          </TableCell>
                           <TableCell className="font-medium max-w-[180px] truncate">
                             {String(row.data.title ?? "—")}
                           </TableCell>
@@ -534,10 +668,20 @@ export default function ImportVideos() {
                           <TableCell className="text-xs">
                             {row.data.durationSeconds ? `${row.data.durationSeconds}s` : "—"}
                           </TableCell>
-                          <TableCell className="text-xs">{String(row.data.contentType ?? "clip")}</TableCell>
                           <TableCell className="text-xs">
-                            {String(row.data.channelSlug ?? defaultChannelSlug === "none" ? "—" : defaultChannelSlug)}
+                            {String(row.data.contentType ?? "clip")}
                           </TableCell>
+                          <TableCell className="text-xs">
+                            {String(
+                              row.data.channelSlug ??
+                                (defaultChannelSlug === "none" ? "—" : defaultChannelSlug)
+                            )}
+                          </TableCell>
+                          {hasThumbnailChecks && (
+                            <TableCell>
+                              <ThumbnailStatusCell check={row.thumbnailCheck} />
+                            </TableCell>
+                          )}
                           <TableCell>
                             <StatusBadge status={row.status} />
                           </TableCell>
@@ -564,7 +708,7 @@ export default function ImportVideos() {
                 )}
                 {importMutation.isPending
                   ? "Importing…"
-                  : `Import ${stats?.valid ?? 0 + (stats?.warning ?? 0)} Videos`}
+                  : `Import ${(stats?.valid ?? 0) + (stats?.warning ?? 0)} Videos`}
               </Button>
             </CardContent>
           </Card>
@@ -575,7 +719,9 @@ export default function ImportVideos() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold">3</span>
+                <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold">
+                  3
+                </span>
                 Import Results
               </CardTitle>
               <CardDescription>
@@ -627,15 +773,15 @@ export default function ImportVideos() {
                               : ""
                           }
                         >
-                          <TableCell className="text-muted-foreground text-xs">{r.rowIndex}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">
+                            {r.rowIndex}
+                          </TableCell>
                           <TableCell className="font-medium">{r.title}</TableCell>
                           <TableCell>
                             <StatusBadge status={r.status} />
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {r.status === "imported"
-                              ? `Video ID: ${r.videoId}`
-                              : r.reason ?? "—"}
+                            {r.status === "imported" ? `Video ID: ${r.videoId}` : r.reason ?? "—"}
                           </TableCell>
                         </TableRow>
                       ))}

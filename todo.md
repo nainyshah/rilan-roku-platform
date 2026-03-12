@@ -97,3 +97,14 @@
 - [x] Frontend: Re-import button in ImportHistory detail drawer with loading state
 - [x] Frontend: After re-import completes, navigate to Import History to show new log entry
 - [x] Tests: Re-import procedure unit test (5 tests: not found, no CSV, success, S3 fallback, fetch error)
+
+## Thumbnail URL Validation During Import
+- [x] Backend: thumbnailValidator helper — HTTP HEAD check with 5s timeout, classify errors (404, timeout, non-image content-type, network error)
+- [x] Backend: parsePreview procedure runs thumbnail checks in parallel (Promise.allSettled) and attaches warnings to each row
+- [x] Backend: Validation summary in parsePreview response (total warnings, broken count, unreachable count)
+- [x] Backend: Skip thumbnail check for rows that already have schema validation errors (fail fast)
+- [x] Frontend: Warning badge on preview table rows with broken thumbnails
+- [x] Frontend: Expandable warning detail (URL, HTTP status, error type) per row
+- [x] Frontend: Summary banner above preview table showing total thumbnail warnings
+- [x] Frontend: Option to proceed with import despite warnings (with confirmation)
+- [x] Tests: thumbnailValidator unit tests — 22 tests (ok, 404, 410, 403, 401, 500, bad_content, HEAD→GET fallback, timeout, network error, invalid_url, batch dedup, mixed results, escalation logic)

@@ -136,7 +136,7 @@ function LogSummaryBadges({ log }: { log: ImportLog }) {
   );
 }
 
-// ─── // ─── Detail drawer ────────────────────────────────────────────
+// ─── Detail drawer ────────────────────────────────────────────────────────────────────────
 function LogDetailDrawer({
   logId,
   open,
