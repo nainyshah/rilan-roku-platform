@@ -176,3 +176,30 @@
 - [x] Frontend: Override values passed to bulkImport mutation instead of the CSV-embedded defaults
 - [x] Tests: 21 new tests (uxImprovements.test.ts) — tag filter x7, allTags logic x5, cache age display x4, re-import override x5
 - [x] Total: 149 tests passing
+
+## Server-Side Video Filtering
+- [x] Backend: getVideos helper supports tags[], sortBy (createdAt|title|publishStatus), sortDir (asc|desc) at DB layer
+- [x] Backend: videos.list procedure accepts and passes tags, sortBy, sortDir to getVideos
+- [x] Frontend: Videos page sends tags/sortBy/sortDir as server-side query params (no client-side filtering)
+- [x] Frontend: Sort controls (Title A-Z, Title Z-A, Newest, Oldest, Status) wired to server query
+- [x] Frontend: Tag filter chips now trigger a server re-fetch instead of client-side filter
+- [x] Tests: videos.list tests — tags pass-through, pagination total, status filter, search filter, invalid sortBy/sortDir rejected
+
+## Webhook Delivery Dashboard
+- [x] Backend: webhooks.allDeliveries tRPC query — returns all deliveries across all webhooks for a channel, sorted by deliveredAt desc
+- [x] Backend: webhooks.retryDelivery tRPC mutation — re-dispatches a single failed delivery
+- [x] Backend: webhooks.retryAllFailed tRPC mutation — retries all failed deliveries for a channel in parallel
+- [x] Frontend: Webhooks page rebuilt with delivery monitoring dashboard (stats cards: total/success/failed/pending)
+- [x] Frontend: Delivery log table with status badges, HTTP code, attempt count, timestamp
+- [x] Frontend: "Retry Failed" button (retries all failed deliveries for the channel, shows count in toast)
+- [x] Frontend: Per-row "Retry" button for individual failed deliveries
+- [x] Frontend: Auto-refresh every 30s when deliveries are in pending/failed state
+
+## Channel Statistics Panel
+- [x] Backend: getChannelStats() DB helper — per-channel counts for video status, validation status, schedule windows, content rows
+- [x] Backend: channels.stats tRPC query — returns full stats object, throws NOT_FOUND for invalid channelId
+- [x] Frontend: ChannelStatsPanel component — 3 sections (Content Overview, Validation Status, Schedule Windows)
+- [x] Frontend: StatCard sub-component with colored borders for at-a-glance health
+- [x] Frontend: Statistics tab added as first tab on Channel Detail page (auto-refreshes every 60s)
+- [x] Tests: channels.stats — full stats return, NOT_FOUND, non-positive channelId rejected, schedule breakdown
+- [x] Total: 161 tests passing

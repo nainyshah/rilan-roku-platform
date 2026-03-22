@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -115,30 +115,70 @@ export async function updateChannelStatus(id: number, status: "active" | "inacti
 }
 
 // ─── Videos ───────────────────────────────────────────────────────────────────
-export async function getVideos(opts?: { search?: string; status?: string; channelId?: number; page?: number; limit?: number }) {
+export async function getVideos(opts?: {
+  search?: string;
+  status?: string;
+  channelId?: number;
+  tags?: string[];
+  page?: number;
+  limit?: number;
+  sortBy?: "createdAt" | "title" | "publishStatus";
+  sortDir?: "asc" | "desc";
+}) {
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
   const page = opts?.page ?? 1;
-  const limit = opts?.limit ?? 20;
+  const limit = Math.min(opts?.limit ?? 20, 100);
   const offset = (page - 1) * limit;
 
-  let query = db.select().from(videos);
-  const conditions = [];
+  const conditions: ReturnType<typeof eq>[] = [];
   if (opts?.search) {
-    conditions.push(or(like(videos.title, `%${opts.search}%`), like(videos.slug, `%${opts.search}%`)));
+    conditions.push(
+      or(
+        like(videos.title, `%${opts.search}%`),
+        like(videos.slug, `%${opts.search}%`),
+        like(videos.description, `%${opts.search}%`)
+      ) as any
+    );
   }
   if (opts?.status) {
     conditions.push(eq(videos.publishStatus, opts.status as any));
   }
-
-  let items;
-  if (conditions.length > 0) {
-    items = await db.select().from(videos).where(and(...conditions)).orderBy(desc(videos.createdAt)).limit(limit).offset(offset);
-  } else {
-    items = await db.select().from(videos).orderBy(desc(videos.createdAt)).limit(limit).offset(offset);
+  // Server-side tag filtering: each tag must appear in the JSON tags array
+  if (opts?.tags && opts.tags.length > 0) {
+    for (const tag of opts.tags) {
+      // MySQL JSON_SEARCH for case-insensitive tag match
+      conditions.push(
+        sql`JSON_SEARCH(LOWER(${videos.tags}), 'one', LOWER(${tag})) IS NOT NULL` as any
+      );
+    }
   }
 
-  const countResult = await db.select({ count: sql<number>`count(*)` }).from(videos);
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Determine sort order
+  const sortDir = opts?.sortDir ?? "desc";
+  let orderExpr;
+  switch (opts?.sortBy) {
+    case "title":
+      orderExpr = sortDir === "asc" ? asc(videos.title) : desc(videos.title);
+      break;
+    case "publishStatus":
+      orderExpr = sortDir === "asc" ? asc(videos.publishStatus) : desc(videos.publishStatus);
+      break;
+    default:
+      orderExpr = sortDir === "asc" ? asc(videos.createdAt) : desc(videos.createdAt);
+  }
+
+  const [items, countResult] = await Promise.all([
+    whereClause
+      ? db.select().from(videos).where(whereClause).orderBy(orderExpr).limit(limit).offset(offset)
+      : db.select().from(videos).orderBy(orderExpr).limit(limit).offset(offset),
+    whereClause
+      ? db.select({ count: sql<number>`count(*)` }).from(videos).where(whereClause)
+      : db.select({ count: sql<number>`count(*)` }).from(videos),
+  ]);
+
   return { items, total: Number(countResult[0]?.count ?? 0) };
 }
 
@@ -433,4 +473,118 @@ export async function getAllDistinctTags(): Promise<string[]> {
     }
   }
   return Array.from(tagSet).sort();
+}
+
+// ─── Channel Statistics ───────────────────────────────────────────────────────
+/**
+ * Returns detailed statistics for a single channel, used by the Channel Detail
+ * statistics panel.
+ */
+export async function getChannelStats(channelId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const now = new Date();
+
+  const [
+    videoStatusRows,
+    validationRows,
+    scheduleRows,
+    categoryRows,
+    channelRow,
+  ] = await Promise.all([
+    // Video counts by publish status
+    db
+      .select({ count: sql<number>`count(*)`, status: videos.publishStatus })
+      .from(channelVideos)
+      .innerJoin(videos, eq(channelVideos.videoId, videos.id))
+      .where(eq(channelVideos.channelId, channelId))
+      .groupBy(videos.publishStatus),
+
+    // Validation status counts
+    db
+      .select({ count: sql<number>`count(*)`, status: videos.validationStatus })
+      .from(channelVideos)
+      .innerJoin(videos, eq(channelVideos.videoId, videos.id))
+      .where(eq(channelVideos.channelId, channelId))
+      .groupBy(videos.validationStatus),
+
+    // Schedule windows
+    db
+      .select({
+        publishFrom: channelVideos.publishFrom,
+        publishTo: channelVideos.publishTo,
+      })
+      .from(channelVideos)
+      .where(eq(channelVideos.channelId, channelId)),
+
+    // Content rows (categories)
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(channelCategories)
+      .where(eq(channelCategories.channelId, channelId)),
+
+    // Channel itself (for last updated)
+    db
+      .select({ updatedAt: channels.updatedAt, createdAt: channels.createdAt, status: channels.status })
+      .from(channels)
+      .where(eq(channels.id, channelId))
+      .limit(1),
+  ]);
+
+  const totalVideos = videoStatusRows.reduce((s, r) => s + Number(r.count), 0);
+  const publishedVideos = Number(videoStatusRows.find((r) => r.status === "published")?.count ?? 0);
+  const draftVideos = Number(videoStatusRows.find((r) => r.status === "draft")?.count ?? 0);
+  const pendingVideos = Number(videoStatusRows.find((r) => r.status === "pending")?.count ?? 0);
+  const approvedVideos = Number(videoStatusRows.find((r) => r.status === "approved")?.count ?? 0);
+  const archivedVideos = Number(videoStatusRows.find((r) => r.status === "archived")?.count ?? 0);
+
+  const validVideos = Number(validationRows.find((r) => r.status === "valid")?.count ?? 0);
+  const invalidVideos = Number(validationRows.find((r) => r.status === "error")?.count ?? 0);
+  const warningVideos = Number(validationRows.find((r) => r.status === "warning")?.count ?? 0);
+  const uncheckedVideos = Number(validationRows.find((r) => r.status === "unchecked")?.count ?? 0);
+
+  // Schedule analysis
+  let activeSchedules = 0;
+  let scheduledFuture = 0;
+  let expiredSchedules = 0;
+  let alwaysOn = 0;
+
+  for (const row of scheduleRows) {
+    const from = row.publishFrom;
+    const to = row.publishTo;
+    if (!from && !to) {
+      alwaysOn++;
+    } else if (to && now > to) {
+      expiredSchedules++;
+    } else if (from && now < from) {
+      scheduledFuture++;
+    } else {
+      activeSchedules++;
+    }
+  }
+
+  const totalContentRows = Number(categoryRows[0]?.count ?? 0);
+  const channelInfo = channelRow[0] ?? null;
+
+  return {
+    totalVideos,
+    publishedVideos,
+    draftVideos,
+    pendingVideos,
+    approvedVideos,
+    archivedVideos,
+    validVideos,
+    invalidVideos,
+    warningVideos,
+    uncheckedVideos,
+    activeSchedules,
+    scheduledFuture,
+    expiredSchedules,
+    alwaysOn,
+    totalContentRows,
+    channelStatus: channelInfo?.status ?? null,
+    channelUpdatedAt: channelInfo?.updatedAt ?? null,
+    channelCreatedAt: channelInfo?.createdAt ?? null,
+  };
 }

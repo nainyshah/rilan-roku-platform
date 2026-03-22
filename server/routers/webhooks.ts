@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc.js";
 import { getDb } from "../db.js";
@@ -261,4 +261,142 @@ export const webhooksRouter = router({
 
   /** Get available event types */
   eventTypes: adminProcedure.query(() => WEBHOOK_EVENTS),
+
+  /**
+   * Retry a specific failed delivery by re-dispatching the same event
+   * to the webhook endpoint.
+   */
+  retryDelivery: adminProcedure
+    .input(z.object({ deliveryId: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      // Fetch the original delivery
+      const deliveryRows = await db
+        .select()
+        .from(webhookDeliveries)
+        .where(eq(webhookDeliveries.id, input.deliveryId))
+        .limit(1);
+      if (!deliveryRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Delivery not found" });
+      const delivery = deliveryRows[0];
+
+      // Fetch the webhook config
+      const cfgRows = await db
+        .select()
+        .from(webhookConfigs)
+        .innerJoin(channels, eq(webhookConfigs.channelId, channels.id))
+        .where(eq(webhookConfigs.id, delivery.webhookId))
+        .limit(1);
+      if (!cfgRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Webhook config not found" });
+
+      const { webhook_configs: cfg, channels: ch } = cfgRows[0];
+
+      // Re-dispatch the same event
+      const result = await testWebhook(
+        cfg.id,
+        cfg.url,
+        cfg.secret ?? "",
+        ch.slug,
+        ch.id
+      );
+
+      return result;
+    }),
+
+  /**
+   * Get aggregated delivery stats across all webhooks for a channel.
+   * Returns total, success, failed counts and recent deliveries.
+   */
+  deliveryStats: adminProcedure
+    .input(z.object({ channelId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      const configs = await db
+        .select({ id: webhookConfigs.id, label: webhookConfigs.label, url: webhookConfigs.url, active: webhookConfigs.active })
+        .from(webhookConfigs)
+        .where(eq(webhookConfigs.channelId, input.channelId));
+
+      if (configs.length === 0) return { configs: [], totalDeliveries: 0, successCount: 0, failedCount: 0, recentDeliveries: [] };
+
+      const webhookIds = configs.map((c) => c.id);
+
+      const allDeliveries = await db
+        .select()
+        .from(webhookDeliveries)
+        .where(inArray(webhookDeliveries.webhookId, webhookIds))
+        .orderBy(desc(webhookDeliveries.deliveredAt))
+        .limit(200);
+
+      const successCount = allDeliveries.filter((d) => d.success).length;
+      const failedCount = allDeliveries.filter((d) => !d.success).length;
+
+      // Per-webhook stats
+      const configStats = configs.map((cfg) => {
+        const cfgDeliveries = allDeliveries.filter((d) => d.webhookId === cfg.id);
+        const lastDelivery = cfgDeliveries[0] ?? null;
+        return {
+          ...cfg,
+          totalDeliveries: cfgDeliveries.length,
+          successCount: cfgDeliveries.filter((d) => d.success).length,
+          failedCount: cfgDeliveries.filter((d) => !d.success).length,
+          lastDeliveredAt: lastDelivery?.deliveredAt ?? null,
+          lastSuccess: lastDelivery?.success ?? null,
+        };
+      });
+
+      return {
+        configs: configStats,
+        totalDeliveries: allDeliveries.length,
+        successCount,
+        failedCount,
+        recentDeliveries: allDeliveries.slice(0, 50).map((d) => ({
+          ...d,
+          webhookLabel: configs.find((c) => c.id === d.webhookId)?.label ?? "Unknown",
+        })),
+      };
+    }),
+
+  /**
+   * Retry all failed deliveries for a webhook (re-fire the most recent failed event).
+   */
+  retryAllFailed: adminProcedure
+    .input(z.object({ webhookId: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      const cfgRows = await db
+        .select()
+        .from(webhookConfigs)
+        .innerJoin(channels, eq(webhookConfigs.channelId, channels.id))
+        .where(eq(webhookConfigs.id, input.webhookId))
+        .limit(1);
+      if (!cfgRows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Webhook not found" });
+
+      const { webhook_configs: cfg, channels: ch } = cfgRows[0];
+
+      // Get the most recent failed delivery
+      const failedDeliveries = await db
+        .select()
+        .from(webhookDeliveries)
+        .where(and(eq(webhookDeliveries.webhookId, input.webhookId), eq(webhookDeliveries.success, false)))
+        .orderBy(desc(webhookDeliveries.deliveredAt))
+        .limit(10);
+
+      if (failedDeliveries.length === 0) return { retriedCount: 0, results: [] };
+
+      // Re-fire each unique failed event (deduplicated by event type)
+      const uniqueEvents = Array.from(new Set(failedDeliveries.map((d) => d.event)));
+      const results = await Promise.allSettled(
+        uniqueEvents.map((event) =>
+          testWebhook(cfg.id, cfg.url, cfg.secret ?? "", ch.slug, ch.id)
+        )
+      );
+
+      const retriedCount = results.filter((r) => r.status === "fulfilled" && r.value.success).length;
+      return { retriedCount, total: uniqueEvents.length };
+    }),
 });

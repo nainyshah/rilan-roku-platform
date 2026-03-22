@@ -26,6 +26,7 @@ import {
   getVideoCategoriesForVideo,
   getVideos,
   getVideosWithScheduleSummary,
+  getChannelStats,
   removeCategoryFromChannel,
   removeVideoFromChannel,
   setVideoCategories,
@@ -264,6 +265,17 @@ export const appRouter = router({
       }),
 
     /**
+     * Channel statistics panel — per-channel metrics for the Channel Detail page.
+     */
+    stats: adminProcedure
+      .input(z.object({ channelId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const stats = await getChannelStats(input.channelId);
+        if (!stats) throw new TRPCError({ code: "NOT_FOUND", message: "Channel not found" });
+        return stats;
+      }),
+
+    /**
      * Set or clear the publish window (publishFrom / publishTo) on a channel_video assignment.
      * Pass null to clear either date.
      */
@@ -310,8 +322,11 @@ export const appRouter = router({
         z.object({
           search: z.string().optional(),
           status: z.string().optional(),
+          tags: z.array(z.string()).optional(),
           page: z.number().optional(),
           limit: z.number().optional(),
+          sortBy: z.enum(["createdAt", "title", "publishStatus"]).optional(),
+          sortDir: z.enum(["asc", "desc"]).optional(),
         }).optional()
       )
       .query(async ({ input }) => {

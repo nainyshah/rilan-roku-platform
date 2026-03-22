@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { trpc } from "@/lib/trpc";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,7 +63,12 @@ import {
   Copy,
   Eye,
   EyeOff,
+  RotateCcw,
+  Activity,
+  AlertCircle,
+  TrendingUp,
 } from "lucide-react";
+import { useState } from "react";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -95,7 +99,16 @@ function formatDate(d: Date | string | null | undefined): string {
   return new Date(d).toLocaleString();
 }
 
-function statusBadge(success: boolean) {
+function formatRelative(d: Date | string | null | undefined): string {
+  if (!d) return "—";
+  const diff = Date.now() - new Date(d).getTime();
+  if (diff < 60_000) return "just now";
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`;
+  return `${Math.floor(diff / 86400_000)}d ago`;
+}
+
+function StatusBadge({ success }: { success: boolean }) {
   return success ? (
     <Badge className="bg-emerald-600/20 text-emerald-400 border-emerald-600/30 gap-1">
       <CheckCircle2 className="w-3 h-3" /> Success
@@ -109,7 +122,27 @@ function statusBadge(success: boolean) {
 
 // ── Delivery Log Row ───────────────────────────────────────────────────────
 
-function DeliveryRow({ d }: { d: { id: number; event: string; statusCode: number | null; responseBody: string | null; attempt: number; success: boolean; deliveredAt: Date; webhookLabel?: string } }) {
+type DeliveryRowData = {
+  id: number;
+  event: string;
+  statusCode: number | null;
+  responseBody: string | null;
+  attempt: number;
+  success: boolean;
+  deliveredAt: Date;
+  webhookLabel?: string;
+  webhookId?: number;
+};
+
+function DeliveryRow({
+  d,
+  onRetry,
+  isRetrying,
+}: {
+  d: DeliveryRowData;
+  onRetry?: (id: number) => void;
+  isRetrying?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -122,18 +155,36 @@ function DeliveryRow({ d }: { d: { id: number; event: string; statusCode: number
             </button>
           </CollapsibleTrigger>
         </TableCell>
-        {d.webhookLabel && <TableCell className="text-xs text-muted-foreground">{d.webhookLabel}</TableCell>}
+        {d.webhookLabel !== undefined && (
+          <TableCell className="text-xs text-muted-foreground">{d.webhookLabel}</TableCell>
+        )}
         <TableCell>
           <Badge variant="outline" className="text-xs font-mono">{d.event}</Badge>
         </TableCell>
-        <TableCell>{statusBadge(d.success)}</TableCell>
+        <TableCell><StatusBadge success={d.success} /></TableCell>
         <TableCell className="text-xs text-muted-foreground">{d.statusCode ?? "—"}</TableCell>
         <TableCell className="text-xs text-muted-foreground">Attempt {d.attempt}</TableCell>
-        <TableCell className="text-xs text-muted-foreground">{formatDate(d.deliveredAt)}</TableCell>
+        <TableCell className="text-xs text-muted-foreground" title={formatDate(d.deliveredAt)}>
+          {formatRelative(d.deliveredAt)}
+        </TableCell>
+        {onRetry && !d.success && (
+          <TableCell>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs gap-1 text-amber-400 hover:text-amber-300"
+              onClick={(e) => { e.stopPropagation(); onRetry(d.id); }}
+              disabled={isRetrying}
+            >
+              <RotateCcw className="w-3 h-3" /> Retry
+            </Button>
+          </TableCell>
+        )}
+        {onRetry && d.success && <TableCell />}
       </TableRow>
       {open && d.responseBody && (
         <TableRow>
-          <TableCell colSpan={d.webhookLabel ? 7 : 6} className="bg-black/20 p-0">
+          <TableCell colSpan={d.webhookLabel !== undefined ? 8 : 7} className="bg-black/20 p-0">
             <CollapsibleContent>
               <pre className="p-3 text-xs text-muted-foreground font-mono overflow-x-auto whitespace-pre-wrap">
                 {d.responseBody}
@@ -143,6 +194,214 @@ function DeliveryRow({ d }: { d: { id: number; event: string; statusCode: number
         </TableRow>
       )}
     </Collapsible>
+  );
+}
+
+// ── Delivery Dashboard ─────────────────────────────────────────────────────
+
+function DeliveryDashboard({ channelId }: { channelId: number }) {
+  const { data: stats, refetch: refetchStats, isLoading } = trpc.webhooks.deliveryStats.useQuery(
+    { channelId },
+    { refetchInterval: 30_000 }
+  );
+
+  const retryDelivery = trpc.webhooks.retryDelivery.useMutation({
+    onSuccess: (r) => {
+      if (r.success) toast.success(`Retry succeeded (HTTP ${r.statusCode})`);
+      else toast.warning(`Retry failed — HTTP ${r.statusCode ?? "N/A"}`);
+      refetchStats();
+    },
+    onError: (e) => toast.error(`Retry failed: ${e.message}`),
+  });
+
+  const retryAllFailed = trpc.webhooks.retryAllFailed.useMutation({
+    onSuccess: (r) => {
+      toast.success(`Retried ${r.total} event type${r.total !== 1 ? "s" : ""} — ${r.retriedCount} succeeded`);
+      refetchStats();
+    },
+    onError: (e) => toast.error(`Retry all failed: ${e.message}`),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-6 text-center text-muted-foreground text-sm">
+        <Activity className="w-6 h-6 mx-auto mb-2 animate-pulse opacity-40" />
+        Loading delivery stats…
+      </div>
+    );
+  }
+
+  if (!stats || stats.configs.length === 0) {
+    return (
+      <div className="p-6 text-center text-muted-foreground text-sm">
+        <Activity className="w-8 h-8 mx-auto mb-2 opacity-30" />
+        No webhooks configured for this channel.
+      </div>
+    );
+  }
+
+  const successRate = stats.totalDeliveries > 0
+    ? Math.round((stats.successCount / stats.totalDeliveries) * 100)
+    : null;
+
+  return (
+    <div className="space-y-4">
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-muted/30 rounded-lg p-3 border border-border">
+          <p className="text-xs text-muted-foreground">Total Deliveries</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{stats.totalDeliveries}</p>
+        </div>
+        <div className="bg-emerald-500/10 rounded-lg p-3 border border-emerald-500/20">
+          <p className="text-xs text-emerald-400">Successful</p>
+          <p className="text-2xl font-bold text-emerald-400 mt-1">{stats.successCount}</p>
+        </div>
+        <div className="bg-red-500/10 rounded-lg p-3 border border-red-500/20">
+          <p className="text-xs text-red-400">Failed</p>
+          <p className="text-2xl font-bold text-red-400 mt-1">{stats.failedCount}</p>
+        </div>
+        <div className="bg-muted/30 rounded-lg p-3 border border-border">
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <TrendingUp className="w-3 h-3" /> Success Rate
+          </p>
+          <p className={`text-2xl font-bold mt-1 ${
+            successRate === null ? "text-muted-foreground"
+            : successRate >= 90 ? "text-emerald-400"
+            : successRate >= 70 ? "text-amber-400"
+            : "text-red-400"
+          }`}>
+            {successRate !== null ? `${successRate}%` : "—"}
+          </p>
+        </div>
+      </div>
+
+      {/* Per-webhook breakdown */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Per-Webhook Status</h3>
+        {stats.configs.map((cfg) => {
+          const cfgRate = cfg.totalDeliveries > 0
+            ? Math.round((cfg.successCount / cfg.totalDeliveries) * 100)
+            : null;
+          return (
+            <div key={cfg.id} className="flex items-center gap-3 bg-muted/20 rounded-lg px-3 py-2.5 border border-border">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-foreground truncate">{cfg.label}</span>
+                  <Badge
+                    variant="outline"
+                    className={cfg.active
+                      ? "bg-emerald-600/20 text-emerald-400 border-emerald-600/30 text-xs"
+                      : "bg-muted text-muted-foreground text-xs"}
+                  >
+                    {cfg.active ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{cfg.url}</p>
+              </div>
+              <div className="flex items-center gap-4 shrink-0 text-xs">
+                <div className="text-center">
+                  <p className="text-muted-foreground">Total</p>
+                  <p className="font-medium text-foreground">{cfg.totalDeliveries}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-emerald-400">OK</p>
+                  <p className="font-medium text-emerald-400">{cfg.successCount}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-red-400">Fail</p>
+                  <p className="font-medium text-red-400">{cfg.failedCount}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-muted-foreground">Rate</p>
+                  <p className={`font-medium ${
+                    cfgRate === null ? "text-muted-foreground"
+                    : cfgRate >= 90 ? "text-emerald-400"
+                    : cfgRate >= 70 ? "text-amber-400"
+                    : "text-red-400"
+                  }`}>
+                    {cfgRate !== null ? `${cfgRate}%` : "—"}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-muted-foreground">Last</p>
+                  <p className="font-medium text-foreground">{formatRelative(cfg.lastDeliveredAt)}</p>
+                </div>
+                {cfg.failedCount > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 h-7 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                    onClick={() => retryAllFailed.mutate({ webhookId: cfg.id })}
+                    disabled={retryAllFailed.isPending}
+                  >
+                    {retryAllFailed.isPending ? (
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-3 h-3" />
+                    )}
+                    Retry Failed
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Recent deliveries table */}
+      {stats.recentDeliveries.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Recent Deliveries
+            </h3>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs gap-1 text-muted-foreground"
+              onClick={() => refetchStats()}
+            >
+              <RefreshCw className="w-3 h-3" /> Refresh
+            </Button>
+          </div>
+          <div className="border border-border rounded-md overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-xs w-12">#</TableHead>
+                  <TableHead className="text-xs">Webhook</TableHead>
+                  <TableHead className="text-xs">Event</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">HTTP</TableHead>
+                  <TableHead className="text-xs">Attempt</TableHead>
+                  <TableHead className="text-xs">Delivered</TableHead>
+                  <TableHead className="text-xs w-20">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stats.recentDeliveries.map((d) => (
+                  <DeliveryRow
+                    key={d.id}
+                    d={d}
+                    onRetry={!d.success ? (id) => retryDelivery.mutate({ deliveryId: id }) : undefined}
+                    isRetrying={retryDelivery.isPending}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {stats.failedCount > 0 && (
+            <div className="flex items-center gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <p className="text-xs text-amber-300 flex-1">
+                {stats.failedCount} failed deliver{stats.failedCount !== 1 ? "ies" : "y"} detected.
+                Use the <strong>Retry Failed</strong> button on each webhook to re-dispatch.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -182,6 +441,15 @@ function WebhookCard({
       onRefresh();
     },
     onError: (err) => toast.error(`Test failed: ${err.message}`),
+  });
+
+  const retryDelivery = trpc.webhooks.retryDelivery.useMutation({
+    onSuccess: (r) => {
+      if (r.success) toast.success(`Retry succeeded (HTTP ${r.statusCode})`);
+      else toast.warning(`Retry failed — HTTP ${r.statusCode ?? "N/A"}`);
+      refetchDeliveries();
+    },
+    onError: (e) => toast.error(`Retry failed: ${e.message}`),
   });
 
   const eventsArr: string[] = (() => {
@@ -270,7 +538,7 @@ function WebhookCard({
             onClick={() => { setShowDeliveries((v) => !v); if (!showDeliveries) refetchDeliveries(); }}
           >
             <Clock className="w-3 h-3" />
-            {showDeliveries ? "Hide" : "Delivery Log"}
+            {showDeliveries ? "Hide Log" : "Delivery Log"}
           </Button>
           <Button
             size="sm"
@@ -307,11 +575,17 @@ function WebhookCard({
                     <TableHead className="text-xs">HTTP</TableHead>
                     <TableHead className="text-xs">Attempt</TableHead>
                     <TableHead className="text-xs">Delivered</TableHead>
+                    <TableHead className="text-xs w-20">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {deliveries.map((d) => (
-                    <DeliveryRow key={d.id} d={d} />
+                    <DeliveryRow
+                      key={d.id}
+                      d={d}
+                      onRetry={!d.success ? (id) => retryDelivery.mutate({ deliveryId: id }) : undefined}
+                      isRetrying={retryDelivery.isPending}
+                    />
                   ))}
                 </TableBody>
               </Table>
@@ -328,21 +602,15 @@ function WebhookCard({
 export default function Webhooks() {
   const [selectedChannelId, setSelectedChannelId] = useState<number | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [editingWebhook, setEditingWebhook] = useState<{ id: number; label: string; url: string; secret?: string | null; events?: unknown; active: boolean; createdAt: Date } | null>(null);
+  const [editingWebhook, setEditingWebhook] = useState<WebhookCfg | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [showAllDeliveries, setShowAllDeliveries] = useState(false);
+  const [activeTab, setActiveTab] = useState<"configs" | "dashboard">("configs");
 
   const { data: channels } = trpc.channels.list.useQuery();
-  const utils = trpc.useUtils();
 
   const { data: webhooks, refetch: refetchWebhooks } = trpc.webhooks.list.useQuery(
     { channelId: selectedChannelId! },
     { enabled: !!selectedChannelId }
-  );
-
-  const { data: allDeliveries } = trpc.webhooks.channelDeliveries.useQuery(
-    { channelId: selectedChannelId!, limit: 50 },
-    { enabled: !!selectedChannelId && showAllDeliveries }
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -385,8 +653,7 @@ export default function Webhooks() {
     setShowCreateDialog(true);
   }
 
-  function openEdit(cfg: typeof editingWebhook) {
-    if (!cfg) return;
+  function openEdit(cfg: WebhookCfg) {
     const eventsArr: string[] = (() => {
       try {
         if (!cfg.events) return [];
@@ -443,7 +710,7 @@ export default function Webhooks() {
               Notify external services when Roku feed content changes. Payloads are HMAC-SHA256 signed.
             </p>
           </div>
-          {selectedChannelId && (
+          {selectedChannelId && activeTab === "configs" && (
             <Button onClick={openCreate} className="gap-2">
               <Plus className="w-4 h-4" />
               Add Webhook
@@ -454,14 +721,11 @@ export default function Webhooks() {
         {/* Channel selector */}
         <Card className="bg-card border-border">
           <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Label className="text-sm shrink-0">Channel</Label>
               <Select
                 value={selectedChannelId?.toString() ?? ""}
-                onValueChange={(v) => {
-                  setSelectedChannelId(Number(v));
-                  setShowAllDeliveries(false);
-                }}
+                onValueChange={(v) => setSelectedChannelId(Number(v))}
               >
                 <SelectTrigger className="w-64">
                   <SelectValue placeholder="Select a channel…" />
@@ -481,8 +745,35 @@ export default function Webhooks() {
           </CardContent>
         </Card>
 
-        {/* Webhook list */}
+        {/* Tab switcher */}
         {selectedChannelId && (
+          <div className="flex gap-1 bg-muted/40 rounded-lg p-1 w-fit">
+            <button
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                activeTab === "configs"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setActiveTab("configs")}
+            >
+              Configurations
+            </button>
+            <button
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                activeTab === "dashboard"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setActiveTab("dashboard")}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              Delivery Dashboard
+            </button>
+          </div>
+        )}
+
+        {/* Webhook list */}
+        {selectedChannelId && activeTab === "configs" && (
           <>
             {!webhooks || webhooks.length === 0 ? (
               <Card className="bg-card border-border">
@@ -508,56 +799,25 @@ export default function Webhooks() {
                 ))}
               </div>
             )}
-
-            {/* All deliveries toggle */}
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">Channel Delivery Log</CardTitle>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 h-7 text-xs"
-                    onClick={() => setShowAllDeliveries((v) => !v)}
-                  >
-                    <Clock className="w-3 h-3" />
-                    {showAllDeliveries ? "Hide" : "Show All"}
-                  </Button>
-                </div>
-                <CardDescription className="text-xs">
-                  Recent deliveries across all webhooks for this channel
-                </CardDescription>
-              </CardHeader>
-              {showAllDeliveries && (
-                <CardContent className="pt-0">
-                  {!allDeliveries || allDeliveries.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">No deliveries yet</p>
-                  ) : (
-                    <div className="border border-border rounded-md overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="hover:bg-transparent">
-                            <TableHead className="text-xs w-12">#</TableHead>
-                            <TableHead className="text-xs">Webhook</TableHead>
-                            <TableHead className="text-xs">Event</TableHead>
-                            <TableHead className="text-xs">Status</TableHead>
-                            <TableHead className="text-xs">HTTP</TableHead>
-                            <TableHead className="text-xs">Attempt</TableHead>
-                            <TableHead className="text-xs">Delivered</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {allDeliveries.map((d) => (
-                            <DeliveryRow key={d.id} d={{ ...d, webhookLabel: d.webhookLabel }} />
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              )}
-            </Card>
           </>
+        )}
+
+        {/* Delivery Dashboard tab */}
+        {selectedChannelId && activeTab === "dashboard" && (
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Activity className="w-4 h-4 text-primary" />
+                Delivery Monitoring Dashboard
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Real-time delivery stats and retry controls for all webhooks on this channel. Auto-refreshes every 30s.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DeliveryDashboard channelId={selectedChannelId} />
+            </CardContent>
+          </Card>
         )}
 
         {/* Signing info card */}

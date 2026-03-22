@@ -19,12 +19,11 @@ import { toast } from "sonner";
 import {
   Plus, Search, Film, AlertTriangle, CheckCircle, ShieldCheck,
   CalendarClock, CalendarX2, CalendarCheck2, Edit,
-  CheckSquare, X, ChevronDown,
+  CheckSquare, X, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Badge } from "@/components/ui/badge";
 import { Tag } from "lucide-react";
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -104,6 +103,37 @@ function ScheduleIndicator({
       </TooltipTrigger>
       <TooltipContent>Currently within an active publish window</TooltipContent>
     </Tooltip>
+  );
+}
+
+// ─── Sortable column header ───────────────────────────────────────────────────
+type SortKey = "createdAt" | "title" | "publishStatus";
+function SortableHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentDir,
+  onSort,
+}: {
+  label: string;
+  sortKey: SortKey;
+  currentSort: SortKey;
+  currentDir: "asc" | "desc";
+  onSort: (key: SortKey) => void;
+}) {
+  const isActive = currentSort === sortKey;
+  return (
+    <button
+      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      onClick={() => onSort(sortKey)}
+    >
+      {label}
+      {isActive ? (
+        currentDir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+      ) : (
+        <ArrowUpDown className="w-3 h-3 opacity-40" />
+      )}
+    </button>
   );
 }
 
@@ -230,12 +260,14 @@ export default function Videos() {
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [sortBy, setSortBy] = useState<SortKey>("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  // Tag filter data
+  // Tag filter data (all available tags, unfiltered)
   const { data: allTagsData } = trpc.videos.allTags.useQuery();
   const allTags = allTagsData ?? [];
 
-  const toggleTag = (tag: string) => {
+  const toggleTag = useCallback((tag: string) => {
     setSelectedTags((prev) => {
       const next = new Set(prev);
       if (next.has(tag)) next.delete(tag);
@@ -244,13 +276,29 @@ export default function Videos() {
     });
     setPage(1);
     setSelectedIds(new Set());
-  };
+  }, []);
+
+  const handleSort = useCallback((key: SortKey) => {
+    if (key === sortBy) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortDir("desc");
+    }
+    setPage(1);
+  }, [sortBy]);
+
+  // Server-side filtering — tags, search, status, sort, pagination all go to DB
+  const tagsArray = useMemo(() => Array.from(selectedTags), [selectedTags]);
 
   const { data, isLoading, refetch } = trpc.videos.list.useQuery({
     search: search || undefined,
     status: statusFilter === "all" ? undefined : statusFilter,
+    tags: tagsArray.length > 0 ? tagsArray : undefined,
     page,
     limit: 20,
+    sortBy,
+    sortDir,
   });
 
   const setStatusMutation = trpc.videos.setStatus.useMutation({
@@ -272,7 +320,7 @@ export default function Videos() {
     onError: (e) => toast.error(`Bulk update failed: ${e.message}`),
   });
 
-  // Schedule summary
+  // Schedule summary — only for the current page
   const videoIds = useMemo(() => data?.items.map((v) => v.id) ?? [], [data?.items]);
   const { data: scheduleData } = trpc.videos.scheduleSummary.useQuery(
     { videoIds },
@@ -284,19 +332,8 @@ export default function Videos() {
     return m;
   }, [scheduleData]);
 
-  // Client-side tag filtering
-  const filteredItems = useMemo(() => {
-    const items = data?.items ?? [];
-    if (selectedTags.size === 0) return items;
-    return items.filter((v) => {
-      const tags = Array.isArray(v.tags) ? (v.tags as string[]) : [];
-      const normalizedTags = tags.map((t: string) => t.trim().toLowerCase());
-      return Array.from(selectedTags).every((st) => normalizedTags.includes(st));
-    });
-  }, [data?.items, selectedTags]);
-
+  const pageItems = data?.items ?? [];
   const totalPages = Math.ceil((data?.total ?? 0) / 20);
-  const pageItems = filteredItems;
 
   // ─── Selection helpers ─────────────────────────────────────────────────────
   const allOnPageSelected = pageItems.length > 0 && pageItems.every((v) => selectedIds.has(v.id));
@@ -331,6 +368,8 @@ export default function Videos() {
     bulkStatusMutation.mutate({ ids: Array.from(selectedIds), status });
   };
 
+  const activeFilterCount = (search ? 1 : 0) + (statusFilter !== "all" ? 1 : 0) + selectedTags.size;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -338,9 +377,19 @@ export default function Videos() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Videos</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {data?.total ?? 0} total videos
-              {selectedIds.size > 0 && (
-                <span className="ml-2 text-primary font-medium">· {selectedIds.size} selected</span>
+              {isLoading ? "Loading…" : (
+                <>
+                  <span className="font-medium text-foreground">{data?.total ?? 0}</span> video{data?.total !== 1 ? "s" : ""}
+                  {activeFilterCount > 0 && (
+                    <span className="ml-1 text-primary">
+                      (filtered
+                      {activeFilterCount > 1 ? ` — ${activeFilterCount} filters` : ""})
+                    </span>
+                  )}
+                  {selectedIds.size > 0 && (
+                    <span className="ml-2 text-primary font-medium">· {selectedIds.size} selected</span>
+                  )}
+                </>
               )}
             </p>
           </div>
@@ -349,12 +398,12 @@ export default function Videos() {
           </Button>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-3 flex-wrap">
+        {/* Filters row */}
+        <div className="flex gap-3 flex-wrap items-center">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search videos..."
+              placeholder="Search title, slug, description…"
               className="pl-9"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); setSelectedIds(new Set()); }}
@@ -373,12 +422,28 @@ export default function Videos() {
               <SelectItem value="archived">Archived</SelectItem>
             </SelectContent>
           </Select>
+          {activeFilterCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 gap-1.5 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("all");
+                setSelectedTags(new Set());
+                setPage(1);
+                setSelectedIds(new Set());
+              }}
+            >
+              <X className="w-3.5 h-3.5" /> Clear all filters
+            </Button>
+          )}
         </div>
 
         {/* Tag filter chips */}
         {allTags.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium shrink-0">Filter by tag:</span>
+            <span className="text-xs text-muted-foreground font-medium shrink-0">Tags:</span>
             {allTags.map((tag) => (
               <TagChip
                 key={tag}
@@ -392,7 +457,7 @@ export default function Videos() {
                 onClick={() => { setSelectedTags(new Set()); setPage(1); }}
                 className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
               >
-                Clear tags
+                Clear tags ({selectedTags.size})
               </button>
             )}
           </div>
@@ -404,15 +469,30 @@ export default function Videos() {
             {isLoading ? (
               <div className="p-8 text-center text-muted-foreground">
                 <Film className="h-8 w-8 mx-auto mb-2 animate-pulse opacity-40" />
-                <p className="text-sm">Loading videos...</p>
+                <p className="text-sm">Loading videos…</p>
               </div>
             ) : pageItems.length === 0 ? (
               <div className="p-12 text-center text-muted-foreground">
                 <Film className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">No videos found.</p>
-                <Button variant="outline" size="sm" className="mt-3" onClick={() => setLocation("/videos/new")}>
-                  Add your first video
-                </Button>
+                <p className="text-sm">
+                  {activeFilterCount > 0 ? "No videos match the current filters." : "No videos found."}
+                </p>
+                {activeFilterCount > 0 ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => {
+                      setSearch(""); setStatusFilter("all"); setSelectedTags(new Set()); setPage(1);
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" className="mt-3" onClick={() => setLocation("/videos/new")}>
+                    Add your first video
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -430,12 +510,19 @@ export default function Videos() {
                         />
                       </th>
                       <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 w-12"></th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3">Title</th>
+                      <th className="text-left px-4 py-3">
+                        <SortableHeader label="Title" sortKey="title" currentSort={sortBy} currentDir={sortDir} onSort={handleSort} />
+                      </th>
                       <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden md:table-cell">Type</th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3">Status</th>
+                      <th className="text-left px-4 py-3">
+                        <SortableHeader label="Status" sortKey="publishStatus" currentSort={sortBy} currentDir={sortDir} onSort={handleSort} />
+                      </th>
                       <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden lg:table-cell">Validation</th>
                       <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden xl:table-cell">Schedule</th>
                       <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden lg:table-cell">Duration</th>
+                      <th className="text-left px-4 py-3 hidden xl:table-cell">
+                        <SortableHeader label="Added" sortKey="createdAt" currentSort={sortBy} currentDir={sortDir} onSort={handleSort} />
+                      </th>
                       <th className="text-right text-xs text-muted-foreground font-medium px-4 py-3">Actions</th>
                     </tr>
                   </thead>
@@ -495,6 +582,12 @@ export default function Videos() {
                                 : "—"}
                             </span>
                           </td>
+                          {/* Added date */}
+                          <td className="px-4 py-3 hidden xl:table-cell">
+                            <span className="text-xs text-muted-foreground">
+                              {video.createdAt ? new Date(video.createdAt).toLocaleDateString() : "—"}
+                            </span>
+                          </td>
                           {/* Actions */}
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-1">
@@ -549,7 +642,8 @@ export default function Videos() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
-              Page {page} of {totalPages} ({data?.total} videos)
+              Page {page} of {totalPages}
+              {data?.total !== undefined && ` · ${data.total} result${data.total !== 1 ? "s" : ""}`}
             </span>
             <div className="flex gap-2">
               <Button
@@ -560,6 +654,22 @@ export default function Videos() {
               >
                 Previous
               </Button>
+              {/* Page number buttons (show up to 5 around current) */}
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+                const p = start + i;
+                return (
+                  <Button
+                    key={p}
+                    variant={p === page ? "default" : "outline"}
+                    size="sm"
+                    className="w-9"
+                    onClick={() => { setPage(p); setSelectedIds(new Set()); }}
+                  >
+                    {p}
+                  </Button>
+                );
+              })}
               <Button
                 variant="outline"
                 size="sm"

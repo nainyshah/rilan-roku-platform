@@ -28,6 +28,12 @@ import {
   Trash2,
   Tv,
   X,
+  BarChart3,
+  ShieldCheck,
+  AlertTriangle,
+  TrendingUp,
+  Layers,
+  Activity,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
@@ -237,6 +243,203 @@ function SchedulePicker({
   );
 }
 
+// ─── Channel Statistics Panel ───────────────────────────────────────────────────
+type ChannelStatsData = {
+  totalVideos: number;
+  publishedVideos: number;
+  draftVideos: number;
+  pendingVideos: number;
+  approvedVideos: number;
+  archivedVideos: number;
+  validVideos: number;
+  invalidVideos: number;
+  warningVideos: number;
+  uncheckedVideos: number;
+  activeSchedules: number;
+  scheduledFuture: number;
+  expiredSchedules: number;
+  alwaysOn: number;
+  totalContentRows: number;
+  channelStatus: string | null;
+  channelUpdatedAt: Date | null;
+  channelCreatedAt: Date | null;
+};
+
+function StatCard({
+  icon,
+  label,
+  value,
+  sub,
+  color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+  sub?: string;
+  color?: string;
+}) {
+  return (
+    <div className={`rounded-lg p-4 border flex flex-col gap-1 ${color ?? "bg-muted/30 border-border"}` }>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {icon}
+        {label}
+      </div>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function ChannelStatsPanel({ stats }: { stats: ChannelStatsData | null }) {
+  if (!stats) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="h-24 bg-muted/30 animate-pulse rounded-lg border border-border" />
+        ))}
+      </div>
+    );
+  }
+
+  const publishRate = stats.totalVideos > 0
+    ? Math.round((stats.publishedVideos / stats.totalVideos) * 100)
+    : 0;
+  const validRate = stats.totalVideos > 0
+    ? Math.round((stats.validVideos / stats.totalVideos) * 100)
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Content overview */}
+      <div>
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Content Overview</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard
+            icon={<Film className="w-3.5 h-3.5" />}
+            label="Total Videos"
+            value={stats.totalVideos}
+            sub="Assigned to this channel"
+          />
+          <StatCard
+            icon={<Activity className="w-3.5 h-3.5" />}
+            label="Published"
+            value={stats.publishedVideos}
+            sub={`${publishRate}% of total`}
+            color="bg-emerald-500/10 border-emerald-500/20"
+          />
+          <StatCard
+            icon={<TrendingUp className="w-3.5 h-3.5" />}
+            label="Pending / Approved"
+            value={stats.pendingVideos + stats.approvedVideos}
+            sub={`${stats.pendingVideos} pending · ${stats.approvedVideos} approved`}
+            color="bg-amber-500/10 border-amber-500/20"
+          />
+          <StatCard
+            icon={<Layers className="w-3.5 h-3.5" />}
+            label="Draft / Archived"
+            value={stats.draftVideos + stats.archivedVideos}
+            sub={`${stats.draftVideos} draft · ${stats.archivedVideos} archived`}
+          />
+        </div>
+      </div>
+
+      {/* Validation status */}
+      <div>
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Validation Status</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard
+            icon={<ShieldCheck className="w-3.5 h-3.5" />}
+            label="Valid"
+            value={stats.validVideos}
+            sub={`${validRate}% pass rate`}
+            color="bg-emerald-500/10 border-emerald-500/20"
+          />
+          <StatCard
+            icon={<AlertTriangle className="w-3.5 h-3.5" />}
+            label="Errors"
+            value={stats.invalidVideos}
+            sub="Failed validation"
+            color={stats.invalidVideos > 0 ? "bg-red-500/10 border-red-500/20" : "bg-muted/30 border-border"}
+          />
+          <StatCard
+            icon={<AlertTriangle className="w-3.5 h-3.5" />}
+            label="Warnings"
+            value={stats.warningVideos}
+            sub="Need attention"
+            color={stats.warningVideos > 0 ? "bg-amber-500/10 border-amber-500/20" : "bg-muted/30 border-border"}
+          />
+          <StatCard
+            icon={<Film className="w-3.5 h-3.5" />}
+            label="Unchecked"
+            value={stats.uncheckedVideos}
+            sub="Not yet validated"
+          />
+        </div>
+      </div>
+
+      {/* Schedule status */}
+      <div>
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Schedule Windows</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <StatCard
+            icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+            label="Live Windows"
+            value={stats.activeSchedules}
+            sub="Currently active"
+            color={stats.activeSchedules > 0 ? "bg-emerald-500/10 border-emerald-500/20" : "bg-muted/30 border-border"}
+          />
+          <StatCard
+            icon={<CalendarClock className="w-3.5 h-3.5" />}
+            label="Scheduled"
+            value={stats.scheduledFuture}
+            sub="Future windows"
+            color={stats.scheduledFuture > 0 ? "bg-blue-500/10 border-blue-500/20" : "bg-muted/30 border-border"}
+          />
+          <StatCard
+            icon={<CalendarX2 className="w-3.5 h-3.5" />}
+            label="Expired"
+            value={stats.expiredSchedules}
+            sub="Past publish-to date"
+            color={stats.expiredSchedules > 0 ? "bg-red-500/10 border-red-500/20" : "bg-muted/30 border-border"}
+          />
+          <StatCard
+            icon={<Tv className="w-3.5 h-3.5" />}
+            label="Always On"
+            value={stats.alwaysOn}
+            sub="No window set"
+          />
+        </div>
+      </div>
+
+      {/* Content rows & last updated */}
+      <div className="flex flex-wrap gap-3">
+        <div className="flex-1 min-w-48 bg-muted/30 rounded-lg p-4 border border-border">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <FolderOpen className="w-3.5 h-3.5" /> Content Rows
+          </div>
+          <p className="text-2xl font-bold text-foreground">{stats.totalContentRows}</p>
+          <p className="text-xs text-muted-foreground">Home screen category rows</p>
+        </div>
+        {stats.channelUpdatedAt && (
+          <div className="flex-1 min-w-48 bg-muted/30 rounded-lg p-4 border border-border">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <Clock className="w-3.5 h-3.5" /> Last Updated
+            </div>
+            <p className="text-sm font-semibold text-foreground">
+              {new Date(stats.channelUpdatedAt).toLocaleString()}
+            </p>
+            {stats.channelCreatedAt && (
+              <p className="text-xs text-muted-foreground">
+                Created {new Date(stats.channelCreatedAt).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ChannelDetail() {
   const { id } = useParams<{ id: string }>();
@@ -244,6 +447,7 @@ export default function ChannelDetail() {
   const channelId = parseInt(id ?? "0");
 
   const { data: channel, isLoading, refetch } = trpc.channels.get.useQuery({ id: channelId }, { enabled: !!channelId });
+  const { data: channelStats } = trpc.channels.stats.useQuery({ channelId }, { enabled: !!channelId, refetchInterval: 60_000 });
   const { data: channelVideos, refetch: refetchVideos } = trpc.channels.getVideos.useQuery({ channelId }, { enabled: !!channelId });
   const { data: channelCategories, refetch: refetchCategories } = trpc.channels.getCategories.useQuery({ channelId }, { enabled: !!channelId });
   const { data: allVideos } = trpc.videos.list.useQuery({ limit: 200 });
@@ -345,6 +549,9 @@ export default function ChannelDetail() {
 
       <Tabs defaultValue="settings">
         <TabsList className="bg-muted">
+          <TabsTrigger value="overview" className="gap-1.5">
+            <BarChart3 className="w-3.5 h-3.5" /> Statistics
+          </TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="videos" className="gap-2">
             Videos ({channelVideos?.length ?? 0})
@@ -357,6 +564,11 @@ export default function ChannelDetail() {
           </TabsTrigger>
           <TabsTrigger value="rows">Content Rows ({channelCategories?.length ?? 0})</TabsTrigger>
         </TabsList>
+
+        {/* Statistics Tab */}
+        <TabsContent value="overview" className="mt-4">
+          <ChannelStatsPanel stats={channelStats ?? null} />
+        </TabsContent>
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="mt-4">
