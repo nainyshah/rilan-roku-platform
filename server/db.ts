@@ -416,3 +416,21 @@ export async function setVideoCategories(videoId: number, categoryIds: number[])
     await db.insert(videoCategories).values(categoryIds.map((categoryId) => ({ videoId, categoryId })));
   }
 }
+
+// ─── Tags ─────────────────────────────────────────────────────────────────────
+/** Return all distinct non-empty tags across all videos (tags stored as JSON array). */
+export async function getAllDistinctTags(): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ tags: videos.tags }).from(videos);
+  const tagSet = new Set<string>();
+  for (const row of rows) {
+    const t = row.tags;
+    if (Array.isArray(t)) {
+      for (const tag of t as string[]) {
+        if (typeof tag === "string" && tag.trim()) tagSet.add(tag.trim().toLowerCase());
+      }
+    }
+  }
+  return Array.from(tagSet).sort();
+}

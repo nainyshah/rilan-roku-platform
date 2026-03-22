@@ -24,6 +24,8 @@ import {
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
+import { Badge } from "@/components/ui/badge";
+import { Tag } from "lucide-react";
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -203,13 +205,46 @@ function BulkActionBar({
   );
 }
 
+// ─── Tag chip ─────────────────────────────────────────────────────────────────
+function TagChip({ tag, active, onClick }: { tag: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+        active
+          ? "bg-primary text-primary-foreground border-primary"
+          : "bg-muted/40 text-muted-foreground border-border hover:bg-muted/70 hover:text-foreground"
+      }`}
+    >
+      <Tag className="w-3 h-3" />
+      {tag}
+    </button>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function Videos() {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // Tag filter data
+  const { data: allTagsData } = trpc.videos.allTags.useQuery();
+  const allTags = allTagsData ?? [];
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag);
+      else next.add(tag);
+      return next;
+    });
+    setPage(1);
+    setSelectedIds(new Set());
+  };
 
   const { data, isLoading, refetch } = trpc.videos.list.useQuery({
     search: search || undefined,
@@ -249,8 +284,19 @@ export default function Videos() {
     return m;
   }, [scheduleData]);
 
+  // Client-side tag filtering
+  const filteredItems = useMemo(() => {
+    const items = data?.items ?? [];
+    if (selectedTags.size === 0) return items;
+    return items.filter((v) => {
+      const tags = Array.isArray(v.tags) ? (v.tags as string[]) : [];
+      const normalizedTags = tags.map((t: string) => t.trim().toLowerCase());
+      return Array.from(selectedTags).every((st) => normalizedTags.includes(st));
+    });
+  }, [data?.items, selectedTags]);
+
   const totalPages = Math.ceil((data?.total ?? 0) / 20);
-  const pageItems = data?.items ?? [];
+  const pageItems = filteredItems;
 
   // ─── Selection helpers ─────────────────────────────────────────────────────
   const allOnPageSelected = pageItems.length > 0 && pageItems.every((v) => selectedIds.has(v.id));
@@ -328,6 +374,29 @@ export default function Videos() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Tag filter chips */}
+        {allTags.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground font-medium shrink-0">Filter by tag:</span>
+            {allTags.map((tag) => (
+              <TagChip
+                key={tag}
+                tag={tag}
+                active={selectedTags.has(tag)}
+                onClick={() => toggleTag(tag)}
+              />
+            ))}
+            {selectedTags.size > 0 && (
+              <button
+                onClick={() => { setSelectedTags(new Set()); setPage(1); }}
+                className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
+              >
+                Clear tags
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Table */}
         <Card className="bg-card border-border">

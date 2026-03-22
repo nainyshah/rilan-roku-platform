@@ -37,6 +37,7 @@ import {
   updateVideo,
   updateVideoStatus,
   upsertUser,
+  getAllDistinctTags,
 } from "./db";
 import { storagePut } from "./storage";
 import { generateRokuFeed, generateValidationReport, validateVideo } from "./feedGenerator";
@@ -435,6 +436,13 @@ export const appRouter = router({
       }),
 
     /**
+     * Return all distinct tags across all videos for filter chips.
+     */
+    allTags: adminProcedure.query(async () => {
+      return getAllDistinctTags();
+    }),
+
+    /**
      * Bulk update the publishStatus of multiple videos at once.
      */
     bulkUpdateStatus: adminProcedure
@@ -627,6 +635,60 @@ export const appRouter = router({
     /** Get Redis cache stats */
     redisCacheStats: adminProcedure.query(async () => {
       return getFeedCacheStatsRedis();
+    }),
+
+    /**
+     * Get Redis + in-memory cache status for all channels at once.
+     * Used by the Publishing page to show per-channel cache age and refresh button.
+     */
+    channelCacheStatuses: adminProcedure.query(async () => {
+      const allChannels = await getChannels();
+      const [redisStats, memEntries] = await Promise.all([
+        getFeedCacheStatsRedis(),
+        Promise.resolve(getFeedCacheStatus()),
+      ]);
+      const now = Date.now();
+      return allChannels.map((ch) => {
+        const redisEntry = redisStats.entries.find((e) => e.slug === ch.slug);
+        const memEntry = memEntries.find((e) => e.slug === ch.slug);
+        if (redisEntry) {
+          return {
+            channelId: ch.id,
+            slug: ch.slug,
+            name: ch.name,
+            cached: true,
+            source: "redis" as const,
+            generatedAt: redisEntry.generatedAt,
+            ageSeconds: Math.floor((now - redisEntry.generatedAt) / 1000),
+            ttlSeconds: redisEntry.ttlSeconds,
+            expiresInSeconds: redisEntry.expiresIn,
+          };
+        }
+        if (memEntry) {
+          return {
+            channelId: ch.id,
+            slug: ch.slug,
+            name: ch.name,
+            cached: !memEntry.isExpired,
+            source: "memory" as const,
+            generatedAt: memEntry.generatedAt,
+            ageSeconds: Math.floor((now - memEntry.generatedAt) / 1000),
+            ttlSeconds: null,
+            expiresInSeconds: Math.floor(memEntry.expiresInMs / 1000),
+          };
+        }
+        return {
+          channelId: ch.id,
+          slug: ch.slug,
+          name: ch.name,
+          cached: false,
+          source: "none" as const,
+          generatedAt: null,
+          ageSeconds: null,
+          ttlSeconds: null,
+          expiresInSeconds: null,
+        };
+      });
     }),
   }),
 

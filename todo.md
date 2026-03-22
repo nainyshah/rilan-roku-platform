@@ -158,3 +158,21 @@
 - [x] Frontend: Signature verification code snippet card
 - [x] Navigation: Webhooks added to sidebar under Publishing section
 - [x] Tests: 12 new tests — Redis cache mock (4), signPayload/verifySignature (4), dispatchWebhooks (2), router structure (2)
+
+## Tag Filter Chips on Videos List
+- [x] Backend: videos.allTags tRPC query — return distinct tags across all videos
+- [x] Frontend: Tag chip row above Videos table (all-tags loaded, toggle to filter)
+- [x] Frontend: Active chips highlighted, clear-all button, chip count badge
+- [x] Frontend: Filter applied client-side (AND logic, case-insensitive)
+
+## Redis Cache Status on Publishing Page
+- [x] Backend: feed.channelCacheStatuses tRPC query — return cache age + hit count per channel slug
+- [x] Frontend: Publishing page — per-channel cache badge (HIT age / MISS / stale)
+- [x] Frontend: "Force Refresh" button per channel — calls feed.invalidateCacheAndNotify, shows toast
+
+## Channel/Category Override on Re-import
+- [x] Frontend: ImportVideos — when in re-import mode, show override panel (channel selector + category selector)
+- [x] Frontend: Override selections pre-filled from original log's defaultChannel/defaultCategory
+- [x] Frontend: Override values passed to bulkImport mutation instead of the CSV-embedded defaults
+- [x] Tests: 21 new tests (uxImprovements.test.ts) — tag filter x7, allTags logic x5, cache age display x4, re-import override x5
+- [x] Total: 149 tests passing

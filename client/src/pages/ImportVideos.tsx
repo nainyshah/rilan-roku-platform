@@ -419,24 +419,70 @@ export default function ImportVideos() {
 
         {/* Re-import banner */}
         {reimportBanner && (
-          <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-            <div className="flex items-center gap-2 text-amber-400 text-sm">
-              <HistoryIcon className="w-4 h-4" />
-              <span>
-                Re-importing from:{" "}
-                <span className="font-mono font-medium">{reimportBanner}</span>
-              </span>
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 overflow-hidden">
+            {/* Banner header */}
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2 text-amber-400 text-sm">
+                <HistoryIcon className="w-4 h-4" />
+                <span>
+                  Re-importing from:{" "}
+                  <span className="font-mono font-medium">{reimportBanner}</span>
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setReimportBanner(null);
+                  handleReset();
+                  window.history.replaceState({}, "", "/import");
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                × Clear
+              </button>
             </div>
-            <button
-              onClick={() => {
-                setReimportBanner(null);
-                handleReset();
-                window.history.replaceState({}, "", "/import");
-              }}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              × Clear
-            </button>
+            {/* Channel / category override */}
+            <div className="px-4 pb-4 border-t border-amber-500/20 pt-3">
+              <p className="text-xs text-amber-300 font-medium mb-3">
+                Override channel &amp; category assignment before re-running
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Default Channel</label>
+                  <Select value={defaultChannelSlug} onValueChange={setDefaultChannelSlug}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="No default channel" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No default channel</SelectItem>
+                      {channels?.map((ch: any) => (
+                        <SelectItem key={ch.id} value={ch.slug}>
+                          {ch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Default Category</label>
+                  <Select value={defaultCategorySlug} onValueChange={setDefaultCategorySlug}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="No default category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No default category</SelectItem>
+                      {(categories as any[])?.map((cat: any) => (
+                        <SelectItem key={cat.id} value={cat.slug}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                These override the original import's defaults. Per-row channelSlug/categorySlug values in the CSV still take precedence.
+              </p>
+            </div>
           </div>
         )}
 
