@@ -176,3 +176,40 @@ export const importLogs = mysqlTable("import_logs", {
 
 export type ImportLog = typeof importLogs.$inferSelect;
 export type InsertImportLog = typeof importLogs.$inferInsert;
+
+// ─── Webhook Configs ──────────────────────────────────────────────────────────
+export const webhookConfigs = mysqlTable("webhook_configs", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Channel this webhook is scoped to */
+  channelId: int("channelId").notNull(),
+  /** Human-readable label for this webhook */
+  label: varchar("label", { length: 255 }).notNull(),
+  /** Target URL to POST to */
+  url: text("url").notNull(),
+  /** HMAC-SHA256 signing secret (stored in plain text — rotate regularly) */
+  secret: varchar("secret", { length: 255 }),
+  /** JSON array of event names to subscribe to, e.g. ["feed.updated","video.published"] */
+  events: json("events"),
+  /** Whether this webhook is currently active */
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WebhookConfig = typeof webhookConfigs.$inferSelect;
+export type InsertWebhookConfig = typeof webhookConfigs.$inferInsert;
+
+// ─── Webhook Deliveries ───────────────────────────────────────────────────────
+export const webhookDeliveries = mysqlTable("webhook_deliveries", {
+  id: int("id").autoincrement().primaryKey(),
+  webhookId: int("webhookId").notNull(),
+  event: varchar("event", { length: 100 }).notNull(),
+  statusCode: int("statusCode"),
+  responseBody: text("responseBody"),
+  attempt: int("attempt").notNull().default(1),
+  success: boolean("success").notNull().default(false),
+  deliveredAt: timestamp("deliveredAt").defaultNow().notNull(),
+});
+
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type InsertWebhookDelivery = typeof webhookDeliveries.$inferInsert;

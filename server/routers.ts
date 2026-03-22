@@ -1,5 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { importRouter } from "./routers/import";
+import { webhooksRouter } from "./routers/webhooks";
+import { dispatchWebhooks } from "./webhookDispatcher";
+import { invalidateFeedCacheRedis, purgeAllFeedCacheRedis, getFeedCacheStatsRedis } from "./redisFeedCache";
 import { z } from "zod";
 import {
   assignCategoryToChannel,
@@ -602,11 +605,33 @@ export const appRouter = router({
       }),
 
     /** Purge the entire feed cache. */
-    purgeCache: adminProcedure.mutation(() => {
+    purgeCache: adminProcedure.mutation(async () => {
       const count = purgeAllFeedCache();
+      await purgeAllFeedCacheRedis();
       return { success: true, purgedCount: count };
     }),
+
+    /** Invalidate Redis cache and dispatch feed.invalidated webhook */
+    invalidateCacheAndNotify: adminProcedure
+      .input(z.object({ channelId: z.number(), slug: z.string() }))
+      .mutation(async ({ input }) => {
+        invalidateFeedCache(input.slug);
+        await invalidateFeedCacheRedis(input.slug);
+        const channel = await getChannelById(input.channelId);
+        if (channel) {
+          await dispatchWebhooks(input.channelId, input.slug, "feed.invalidated");
+        }
+        return { success: true };
+      }),
+
+    /** Get Redis cache stats */
+    redisCacheStats: adminProcedure.query(async () => {
+      return getFeedCacheStatsRedis();
+    }),
   }),
+
+  // ─── Webhooks ──────────────────────────────────────────────────────────
+  webhooks: webhooksRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `webhook_configs` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `channelId` int NOT NULL,\n  `label` varchar(255) NOT NULL,\n  `url` text NOT NULL,\n  `secret` varchar(255),\n  `events` json,\n  `active` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `webhook_configs_id` PRIMARY KEY(`id`)\n);\n\nCREATE TABLE `webhook_deliveries` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `webhookId` int NOT NULL,\n  `event` varchar(100) NOT NULL,\n  `statusCode` int,\n  `responseBody` text,\n  `attempt` int NOT NULL DEFAULT 1,\n  `success` boolean NOT NULL DEFAULT false,\n  `deliveredAt` timestamp NOT NULL DEFAULT (now()),\n  CONSTRAINT `webhook_deliveries_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3otSeZLaG2g6mhr.root --database NAe7NGE4cjeEx46c5Rofwa --execute CREATE TABLE `webhook_configs` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `channelId` int NOT NULL,\n  `label` varchar(255) NOT NULL,\n  `url` text NOT NULL,\n  `secret` varchar(255),\n  `events` json,\n  `active` boolean NOT NULL DEFAULT true,\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n  CONSTRAINT `webhook_configs_id` PRIMARY KEY(`id`)\n);\n\nCREATE TABLE `webhook_deliveries` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `webhookId` int NOT NULL,\n  `event` varchar(100) NOT NULL,\n  `statusCode` int,\n  `responseBody` text,\n  `attempt` int NOT NULL DEFAULT 1,\n  `success` boolean NOT NULL DEFAULT false,\n  `deliveredAt` timestamp NOT NULL DEFAULT (now()),\n  CONSTRAINT `webhook_deliveries_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2536
+}

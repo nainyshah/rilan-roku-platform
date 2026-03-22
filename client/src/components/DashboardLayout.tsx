@@ -40,6 +40,7 @@ import {
   Settings,
   Tv,
   Upload,
+  Webhook,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -60,6 +61,7 @@ const publishMenuItems = [
   { icon: Image, label: "Branding", path: "/branding" },
   { icon: Rss, label: "Feed Preview", path: "/feed-preview" },
   { icon: Send, label: "Publishing", path: "/publishing" },
+  { icon: Webhook, label: "Webhooks", path: "/webhooks" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

@@ -9,7 +9,11 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getFeedData, getChannelBySlug } from "../db";
 import { generateRokuFeed } from "../feedGenerator";
-import { getCachedFeed, setCachedFeed } from "../feedCache";
+import {
+  getCachedFeedRedis,
+  setCachedFeedRedis,
+  invalidateFeedCacheRedis,
+} from "../redisFeedCache";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -43,15 +47,14 @@ async function startServer() {
     try {
       const slug = req.params.slug.replace(/\.json$/, "");
 
-      // Check cache first
-      const cached = getCachedFeed(slug);
+      // Check Redis cache first
+      const cached = await getCachedFeedRedis(slug);
       if (cached) {
         res.setHeader("Content-Type", "application/json");
         res.setHeader("Cache-Control", "public, max-age=300");
         res.setHeader("Access-Control-Allow-Origin", "*");
         res.setHeader("X-Cache", "HIT");
-        res.setHeader("X-Cache-Age", String(Math.round((Date.now() - cached.generatedAt) / 1000)));
-        res.send(cached.feedJson);
+        res.send(cached);
         return;
       }
 
@@ -68,8 +71,8 @@ async function startServer() {
       const feed = generateRokuFeed(channel, rows, channelVideoRows, vcMappings);
       const feedJson = JSON.stringify(feed);
 
-      // Store in cache (5-minute TTL)
-      setCachedFeed(slug, feedJson);
+      // Store in Redis cache (5-minute TTL)
+      await setCachedFeedRedis(slug, feedJson);
 
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Cache-Control", "public, max-age=300");

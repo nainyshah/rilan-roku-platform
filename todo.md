@@ -136,3 +136,25 @@
 - [x] Frontend: Stream URL column in preview table with StreamStatusCell badge
 - [x] Frontend: Stream warning summary banner (separate from thumbnail banner)
 - [x] Tests: streamUrlValidator unit tests — 25 tests (ok/HLS/DASH/no-CT/unknown-type/bad-content/404/410/403/401/500/timeout/network-error/invalid-URL/HEAD→GET/batch-dedup/mixed)
+
+## Redis Feed Cache + Roku Webhooks
+- [x] Backend: Install ioredis, add REDIS_URL secret (Upstash TLS)
+- [x] Backend: redisFeedCache.ts — get/set/invalidate/purge with Redis TTL (5-min default)
+- [x] Backend: Fallback to in-memory cache when Redis is unavailable
+- [x] Backend: Feed REST endpoint uses Redis cache (HIT/MISS headers preserved)
+- [x] DB: webhook_configs table (id, channelId, url, secret, events, active, createdAt)
+- [x] DB: webhook_deliveries table (id, webhookId, event, payload, statusCode, responseBody, attempt, deliveredAt)
+- [x] DB: Generate and apply migration SQL
+- [x] Backend: webhookDispatcher.ts — fire POST to webhook URL with HMAC-SHA256 signature header
+- [x] Backend: Retry logic (3 attempts, exponential backoff) with delivery log
+- [x] Backend: Trigger webhook on feed invalidation (feed.invalidateCacheAndNotify procedure)
+- [x] Backend: tRPC procedures — list, create, update, delete webhook configs
+- [x] Backend: tRPC procedure — test-fire a webhook (sends a test ping payload)
+- [x] Backend: tRPC procedure — list delivery logs per webhook + channelDeliveries
+- [x] Frontend: Webhooks page — channel selector, webhook cards with events/secret/status
+- [x] Frontend: Add/edit webhook dialog (URL, secret, events checkboxes, active toggle)
+- [x] Frontend: Delivery log (per-webhook collapsible + channel-wide panel)
+- [x] Frontend: Test-fire button with HTTP status feedback toast
+- [x] Frontend: Signature verification code snippet card
+- [x] Navigation: Webhooks added to sidebar under Publishing section
+- [x] Tests: 12 new tests — Redis cache mock (4), signPayload/verifySignature (4), dispatchWebhooks (2), router structure (2)

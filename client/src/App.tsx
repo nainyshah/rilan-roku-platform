@@ -16,6 +16,7 @@ import FeedPreview from "./pages/FeedPreview";
 import Publishing from "./pages/Publishing";
 import ImportVideos from "./pages/ImportVideos";
 import ImportHistory from "./pages/ImportHistory";
+import Webhooks from "./pages/Webhooks";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ function Router() {
         <Route path="/publishing" component={Publishing} />
         <Route path="/import" component={ImportVideos} />
         <Route path="/import/history" component={ImportHistory} />
+        <Route path="/webhooks" component={Webhooks} />
         <Route component={NotFound} />
       </Switch>
     </DashboardLayout>
