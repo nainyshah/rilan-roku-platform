@@ -7,7 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { getFeedData, getChannelBySlug } from "../db";
+import { getFeedData, getChannelBySlug, getChannels } from "../db";
 import { generateRokuFeed } from "../feedGenerator";
 import {
   getCachedFeedRedis,
@@ -40,6 +40,73 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  // ─── Health Check ─────────────────────────────────────────────────────────
+  // GET /api/health — lightweight liveness probe used by the Roku app before
+  // attempting config/feed fetches.  Returns a 200 with a JSON body so the
+  // Roku app can distinguish "server up but misconfigured" from "server down".
+  // The response includes a serverTime field so the Roku app can detect large
+  // clock skew between the device and the backend.
+  app.get("/api/health", (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json({
+      status: "ok",
+      service: "rilan-roku-platform",
+      serverTime: new Date().toISOString(),
+    });
+  });
+
+  // ─── Channel Discovery ────────────────────────────────────────────────────
+  // GET /api/roku/channels.json — returns the list of active channels for the
+  // Phase 2 single-app multi-channel selector screen.
+  //
+  // Response shape:
+  //   {
+  //     channels: [
+  //       {
+  //         slug:         string   — unique channel identifier
+  //         name:         string   — display name shown in the selector
+  //         description:  string   — short description (may be empty)
+  //         language:     string   — ISO 639-1 language code
+  //         contentRating:string   — e.g. "G", "TV-G", "TV-14"
+  //         logoUrl:      string   — absolute URL to channel logo (may be empty)
+  //         configUrl:    string   — /api/roku/config/<slug>.json
+  //         feedUrl:      string   — /api/roku/feed/<slug>.json
+  //       }
+  //     ]
+  //   }
+  //
+  // Only channels with status = "active" are included.
+  // The response is cached for 60 seconds — channel list changes are rare and
+  // a 1-minute delay is acceptable.
+  app.get("/api/roku/channels.json", async (req, res) => {
+    try {
+      const allChannels = await getChannels();
+      const activeChannels = allChannels
+        .filter((ch) => ch.status === "active")
+        .map((ch) => ({
+          slug:          ch.slug,
+          name:          ch.name,
+          description:   ch.description ?? "",
+          language:      ch.language ?? "en",
+          contentRating: ch.contentRating ?? "G",
+          // logoUrl is stored inside brandingJson, not as a top-level column.
+          // Extract it defensively; fall back to empty string if absent.
+          logoUrl:       (ch.brandingJson as Record<string, string> | null)?.logoUrl ?? "",
+          configUrl:     `/api/roku/config/${ch.slug}.json`,
+          feedUrl:       `/api/roku/feed/${ch.slug}.json`,
+        }));
+
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.json({ channels: activeChannels });
+    } catch (err) {
+      console.error("[ChannelDiscovery] Error:", err);
+      res.status(500).json({ error: "Channel list unavailable" });
+    }
+  });
 
   // ─── Public Roku Feed Endpoints ───────────────────────────────────────────
   // GET /api/roku/feed/:slug.json — Roku Direct Publisher feed (with 5-min TTL cache)
