@@ -203,3 +203,8 @@
 - [x] Frontend: Statistics tab added as first tab on Channel Detail page (auto-refreshes every 60s)
 - [x] Tests: channels.stats — full stats return, NOT_FOUND, non-positive channelId rejected, schedule breakdown
 - [x] Total: 161 tests passing
+
+## New Features (2026-03-24)
+- [x] CMS Dashboard: real-time health check status indicator (polls /api/health every 60s, green/amber/red badge)
+- [x] Channel Detail Branding: dedicated logo upload control (S3 upload, stored in brandingJson.logoUrl, shown in channel selector)
+- [x] Roku: SettingsScene with Change Channel button (clears registry slug, relaunches ChannelSelectorScene)

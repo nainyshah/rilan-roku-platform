@@ -2,12 +2,110 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Film, Tv, CheckCircle, AlertTriangle, FileText, Clock, Radio, ArrowRight } from "lucide-react";
+import { Film, Tv, CheckCircle, AlertTriangle, FileText, Clock, Radio, ArrowRight, Wifi, WifiOff, RefreshCw } from "lucide-react";
 import { useLocation } from "wouter";
+import { useState, useEffect, useCallback } from "react";
+
+// ─── Health check hook ────────────────────────────────────────────────────────
+type HealthStatus = "checking" | "ok" | "degraded" | "down";
+
+interface HealthState {
+  status: HealthStatus;
+  latencyMs: number | null;
+  serverTime: string | null;
+  lastChecked: Date | null;
+  error: string | null;
+}
+
+function useHealthCheck(intervalMs = 60_000) {
+  const [health, setHealth] = useState<HealthState>({
+    status: "checking",
+    latencyMs: null,
+    serverTime: null,
+    lastChecked: null,
+    error: null,
+  });
+
+  const check = useCallback(async () => {
+    const start = performance.now();
+    try {
+      const res = await fetch("/api/health", { cache: "no-store" });
+      const latencyMs = Math.round(performance.now() - start);
+      if (res.ok) {
+        const body = await res.json();
+        setHealth({
+          status: latencyMs > 2000 ? "degraded" : "ok",
+          latencyMs,
+          serverTime: body.serverTime ?? null,
+          lastChecked: new Date(),
+          error: null,
+        });
+      } else {
+        setHealth({
+          status: res.status >= 500 ? "down" : "degraded",
+          latencyMs: Math.round(performance.now() - start),
+          serverTime: null,
+          lastChecked: new Date(),
+          error: `HTTP ${res.status}`,
+        });
+      }
+    } catch (err) {
+      setHealth({
+        status: "down",
+        latencyMs: null,
+        serverTime: null,
+        lastChecked: new Date(),
+        error: err instanceof Error ? err.message : "Network error",
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    check();
+    const id = setInterval(check, intervalMs);
+    return () => clearInterval(id);
+  }, [check, intervalMs]);
+
+  return { health, refresh: check };
+}
+
+// ─── Health badge component ───────────────────────────────────────────────────
+function HealthBadge({ health, onRefresh }: { health: HealthState; onRefresh: () => void }) {
+  const configs: Record<HealthStatus, { label: string; dot: string; text: string; border: string; bg: string }> = {
+    checking: { label: "Checking…",  dot: "bg-zinc-400 animate-pulse",  text: "text-zinc-400",   border: "border-zinc-500/30",   bg: "bg-zinc-500/10" },
+    ok:       { label: "Operational", dot: "bg-emerald-400",             text: "text-emerald-400", border: "border-emerald-500/30", bg: "bg-emerald-500/10" },
+    degraded: { label: "Degraded",    dot: "bg-amber-400 animate-pulse", text: "text-amber-400",   border: "border-amber-500/30",   bg: "bg-amber-500/10" },
+    down:     { label: "Unavailable", dot: "bg-red-500 animate-pulse",   text: "text-red-400",     border: "border-red-500/30",     bg: "bg-red-500/10" },
+  };
+  const c = configs[health.status];
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${c.border} ${c.bg}`}>
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.dot}`} />
+      <span className={`text-xs font-medium ${c.text}`}>{c.label}</span>
+      {health.latencyMs !== null && (
+        <span className="text-xs text-muted-foreground">{health.latencyMs} ms</span>
+      )}
+      {health.lastChecked && (
+        <span className="text-xs text-muted-foreground hidden sm:inline">
+          · {health.lastChecked.toLocaleTimeString()}
+        </span>
+      )}
+      <button
+        onClick={onRefresh}
+        className="ml-1 text-muted-foreground hover:text-foreground transition-colors"
+        title="Refresh health check"
+      >
+        <RefreshCw className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
+  const { health, refresh: refreshHealth } = useHealthCheck(60_000);
 
   const statCards = [
     {
@@ -69,16 +167,19 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">
             RILAN Roku Content Platform — channel publishing overview
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Radio className="h-5 w-5 text-primary" />
-          <span className="text-sm font-medium text-muted-foreground">RILAN GAMES LLC</span>
+        <div className="flex items-center gap-3">
+          <HealthBadge health={health} onRefresh={refreshHealth} />
+          <div className="flex items-center gap-2">
+            <Radio className="h-5 w-5 text-primary" />
+            <span className="text-sm font-medium text-muted-foreground">RILAN GAMES LLC</span>
+          </div>
         </div>
       </div>
 
@@ -105,6 +206,48 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Service Status Card — shown when degraded or down */}
+      {(health.status === "degraded" || health.status === "down") && (
+        <Card className={`border ${
+          health.status === "down" ? "border-red-500/40 bg-red-500/5" : "border-amber-500/40 bg-amber-500/5"
+        }`}>
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              {health.status === "down" ? (
+                <WifiOff className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+              ) : (
+                <Wifi className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${
+                  health.status === "down" ? "text-red-400" : "text-amber-400"
+                }`}>
+                  {health.status === "down" ? "Backend service is unavailable" : "Backend service is responding slowly"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {health.status === "down"
+                    ? "Roku feed endpoints and CMS operations may be affected. Check server logs for details."
+                    : `Response time is ${health.latencyMs} ms — above the 2 s threshold. Feed generation may be slow.`}
+                </p>
+                {health.error && (
+                  <p className="text-xs font-mono text-muted-foreground mt-1 bg-muted px-2 py-1 rounded">
+                    {health.error}
+                  </p>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-shrink-0"
+                onClick={refreshHealth}
+              >
+                <RefreshCw className="w-3 h-3 mr-1" /> Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

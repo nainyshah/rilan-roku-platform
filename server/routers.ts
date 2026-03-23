@@ -140,6 +140,7 @@ export const appRouter = router({
           language: z.string().optional(),
           contentRating: z.string().optional(),
           themeJson: z.any().optional(),
+          brandingJson: z.any().optional(),
           featureFlagsJson: z.any().optional(),
           adSettingsJson: z.any().optional(),
         })
@@ -148,6 +149,51 @@ export const appRouter = router({
         const { id, ...data } = input;
         await updateChannel(id, data);
         return { success: true };
+      }),
+
+    /**
+     * Upload a channel logo image to S3 and persist the URL inside brandingJson.
+     * The logo is used by the Phase 2 ChannelSelectorScene on Roku devices and
+     * is also exposed via the /api/roku/channels.json discovery endpoint.
+     *
+     * Input:
+     *   channelId    — target channel
+     *   fileDataBase64 — base64-encoded image bytes
+     *   fileName     — original filename (used for the S3 key)
+     *   mimeType     — e.g. "image/png", "image/jpeg"
+     *
+     * The procedure:
+     *   1. Uploads the image to S3 at branding/<channelId>/logo-<timestamp>.<ext>
+     *   2. Reads the current brandingJson for the channel
+     *   3. Merges { logoUrl } into the existing brandingJson object
+     *   4. Writes the updated brandingJson back via updateChannel
+     *   5. Returns { logoUrl } so the frontend can update its local state
+     */
+    uploadLogo: adminProcedure
+      .input(
+        z.object({
+          channelId: z.number().positive(),
+          fileDataBase64: z.string().min(1),
+          fileName: z.string().min(1),
+          mimeType: z.string().min(1),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const channel = await getChannelById(input.channelId);
+        if (!channel) throw new TRPCError({ code: "NOT_FOUND", message: "Channel not found" });
+
+        // Upload image bytes to S3
+        const ext = input.fileName.split(".").pop() ?? "png";
+        const fileKey = `branding/${input.channelId}/logo-${Date.now()}.${ext}`;
+        const buffer = Buffer.from(input.fileDataBase64, "base64");
+        const { url: logoUrl } = await storagePut(fileKey, buffer, input.mimeType);
+
+        // Merge logoUrl into existing brandingJson
+        const existing = (channel.brandingJson as Record<string, unknown> | null) ?? {};
+        const updatedBranding = { ...existing, logoUrl, logoFileKey: fileKey };
+        await updateChannel(input.channelId, { brandingJson: updatedBranding });
+
+        return { logoUrl };
       }),
 
     setStatus: adminProcedure

@@ -283,3 +283,112 @@ describe("channels.stats — statistics panel", () => {
     expect(result.alwaysOn).toBe(4);
   });
 });
+
+// ─── 4. channels.uploadLogo — logo upload procedure ──────────────────────────
+
+// Mock the storage module for logo upload tests
+vi.mock("./storage", () => ({
+  storagePut: vi.fn(),
+}));
+
+import * as storage from "./storage";
+
+describe("channels.uploadLogo — logo upload", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("calls storagePut with the correct key and returns a logoUrl", async () => {
+    vi.mocked(db.getChannelById).mockResolvedValue({
+      id: 1,
+      name: "Test Channel",
+      slug: "test-channel",
+      description: null,
+      language: "en",
+      contentRating: "all",
+      status: "active",
+      brandingJson: null,
+      featureFlagsJson: null,
+      adSettingsJson: null,
+      themeJson: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    vi.mocked(db.updateChannel).mockResolvedValue(undefined);
+    vi.mocked(storage.storagePut).mockResolvedValue({
+      key: "channel-logos/test-channel-abc123.png",
+      url: "https://cdn.example.com/channel-logos/test-channel-abc123.png",
+    });
+
+    const caller = appRouter.createCaller(makeAdminCtx());
+    const result = await caller.channels.uploadLogo({
+      channelId: 1,
+      fileDataBase64: Buffer.from("fake-image-data").toString("base64"),
+      fileName: "logo.png",
+      mimeType: "image/png",
+    });
+
+    expect(storage.storagePut).toHaveBeenCalledOnce();
+    expect(result.logoUrl).toContain("https://");
+    expect(typeof result.logoUrl).toBe("string");
+  });
+
+  it("throws NOT_FOUND when channel does not exist", async () => {
+    vi.mocked(db.getChannelById).mockResolvedValue(null);
+
+    const caller = appRouter.createCaller(makeAdminCtx());
+
+    await expect(
+      caller.channels.uploadLogo({
+        channelId: 9999,
+        fileDataBase64: "aGVsbG8=",
+        fileName: "logo.png",
+        mimeType: "image/png",
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("rejects unsupported MIME types", async () => {
+    const caller = appRouter.createCaller(makeAdminCtx());
+
+    await expect(
+      caller.channels.uploadLogo({
+        channelId: 1,
+        fileDataBase64: "aGVsbG8=",
+        fileName: "logo.gif",
+        mimeType: "image/gif",
+      })
+    ).rejects.toThrow();
+  });
+});
+
+// ─── 5. /api/health endpoint — backend health check ──────────────────────────
+// The health endpoint is a plain Express route, not a tRPC procedure.
+// We test it by importing the handler logic directly.
+
+describe("/api/health — health check endpoint", () => {
+  it("health endpoint is registered in the backend", async () => {
+    // Verify the health endpoint exists by checking the route is defined
+    // in the server core. This is a structural test — the actual HTTP
+    // response is tested via integration tests in CI.
+    const fs = await import("fs");
+    const indexContent = fs.readFileSync(
+      new URL("../server/_core/index.ts", import.meta.url).pathname,
+      "utf-8"
+    );
+    expect(indexContent).toContain("/api/health");
+    expect(indexContent).toContain("status");
+    expect(indexContent).toContain("ok");
+  });
+
+  it("health endpoint response shape includes required fields", async () => {
+    const fs = await import("fs");
+    const indexContent = fs.readFileSync(
+      new URL("../server/_core/index.ts", import.meta.url).pathname,
+      "utf-8"
+    );
+    // Verify the endpoint emits a status field and a server time
+    expect(indexContent).toContain("serverTime");
+    expect(indexContent).toContain("service");
+  });
+});

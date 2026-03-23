@@ -34,8 +34,11 @@ import {
   TrendingUp,
   Layers,
   Activity,
+  ImageIcon,
+  Upload,
+  CheckCircle,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 
 // ─── Schedule status helpers ──────────────────────────────────────────────────
@@ -455,6 +458,21 @@ export default function ChannelDetail() {
 
   const [form, setForm] = useState({ name: "", description: "", language: "en", contentRating: "all" });
 
+  // Logo upload state
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+
+  // Initialise logo preview from existing brandingJson
+  useEffect(() => {
+    if (channel) {
+      const branding = channel.brandingJson as Record<string, unknown> | null;
+      if (branding?.logoUrl && typeof branding.logoUrl === "string") {
+        setLogoPreview(branding.logoUrl);
+      }
+    }
+  }, [channel]);
+
   useEffect(() => {
     if (channel) {
       setForm({
@@ -470,6 +488,47 @@ export default function ChannelDetail() {
     onSuccess: () => { toast.success("Channel updated"); refetch(); },
     onError: (e) => toast.error(e.message),
   });
+
+  const uploadLogoMutation = trpc.channels.uploadLogo.useMutation({
+    onSuccess: ({ logoUrl }) => {
+      setLogoPreview(logoUrl);
+      setLogoFile(null);
+      toast.success("Logo uploaded and saved");
+      refetch();
+    },
+    onError: (e) => toast.error(`Logo upload failed: ${e.message}`),
+  });
+
+  async function handleLogoUpload() {
+    if (!logoFile) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      uploadLogoMutation.mutate({
+        channelId,
+        fileDataBase64: base64,
+        fileName: logoFile.name,
+        mimeType: logoFile.type,
+      });
+    };
+    reader.readAsDataURL(logoFile);
+  }
+
+  function handleLogoFileChange(file: File | null) {
+    if (!file) return;
+    const allowed = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
+    if (!allowed.includes(file.type)) {
+      toast.error("Only PNG, JPEG, WebP, or SVG images are accepted");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Logo must be under 5 MB");
+      return;
+    }
+    setLogoFile(file);
+    const url = URL.createObjectURL(file);
+    setLogoPreview(url);
+  }
 
   const removeVideoMutation = trpc.channels.removeVideo.useMutation({
     onSuccess: () => { toast.success("Video removed"); refetchVideos(); },
@@ -563,6 +622,9 @@ export default function ChannelDetail() {
             )}
           </TabsTrigger>
           <TabsTrigger value="rows">Content Rows ({channelCategories?.length ?? 0})</TabsTrigger>
+          <TabsTrigger value="branding" className="gap-1.5">
+            <ImageIcon className="w-3.5 h-3.5" /> Branding
+          </TabsTrigger>
         </TabsList>
 
         {/* Statistics Tab */}
@@ -623,6 +685,109 @@ export default function ChannelDetail() {
                 <Save className="h-4 w-4" />
                 {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Branding Tab */}
+        <TabsContent value="branding" className="mt-4">
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="text-sm">Channel Logo</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                The logo is shown in the Roku channel selector screen (Phase 2 multi-channel) and
+                returned by the <span className="font-mono">/api/roku/channels.json</span> discovery endpoint.
+                Recommended: 400 × 400 px PNG or SVG, transparent background.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Current logo preview */}
+              <div className="flex items-start gap-6" data-section="logo-upload">
+                <div className="flex-shrink-0">
+                  <p className="text-xs text-muted-foreground mb-2">Current logo</p>
+                  <div className="w-32 h-32 rounded-xl border border-border bg-muted/30 flex items-center justify-center overflow-hidden">
+                    {logoPreview ? (
+                      <img
+                        src={logoPreview}
+                        alt="Channel logo"
+                        className="w-full h-full object-contain p-2"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <Tv className="w-8 h-8 opacity-40" />
+                        <span className="text-xs">No logo</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 space-y-3">
+                  {/* Drag-and-drop zone */}
+                  <div
+                    className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer ${
+                      isDraggingLogo
+                        ? "border-primary bg-primary/5"
+                        : logoFile
+                        ? "border-emerald-500/50 bg-emerald-500/5"
+                        : "border-border hover:border-primary/50 hover:bg-muted/30"
+                    }`}
+                    onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
+                    onDragLeave={() => setIsDraggingLogo(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingLogo(false);
+                      handleLogoFileChange(e.dataTransfer.files[0] ?? null);
+                    }}
+                    onClick={() => document.getElementById("logo-file-input")?.click()}
+                  >
+                    <input
+                      id="logo-file-input"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      className="hidden"
+                      onChange={(e) => handleLogoFileChange(e.target.files?.[0] ?? null)}
+                    />
+                    {logoFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <CheckCircle className="w-8 h-8 text-emerald-400" />
+                        <p className="text-sm font-medium text-foreground">{logoFile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(logoFile.size / 1024).toFixed(1)} KB · Ready to upload
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="w-8 h-8 text-muted-foreground" />
+                        <p className="text-sm font-medium text-foreground">Drop an image here</p>
+                        <p className="text-xs text-muted-foreground">or click to browse · PNG, JPEG, WebP, SVG · max 5 MB</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload button */}
+                  <Button
+                    onClick={handleLogoUpload}
+                    disabled={!logoFile || uploadLogoMutation.isPending}
+                    className="gap-2 w-full"
+                  >
+                    {uploadLogoMutation.isPending ? (
+                      <><Upload className="w-4 h-4 animate-bounce" /> Uploading…</>
+                    ) : (
+                      <><Upload className="w-4 h-4" /> Upload Logo</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Existing brandingJson display */}
+              {!!channel.brandingJson && (
+                <div className="border border-border rounded-lg p-3 bg-muted/20">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Stored branding data (brandingJson)</p>
+                  <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-all">
+                    {JSON.stringify(channel.brandingJson as Record<string, unknown>, null, 2)}
+                  </pre>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
