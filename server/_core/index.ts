@@ -85,6 +85,22 @@ async function startServer() {
     }
   });
 
+  // ─── Config schema version ──────────────────────────────────────────────────
+  // Increment this constant whenever the config JSON shape changes in a way
+  // that a Roku app built against the previous version cannot handle silently.
+  // The Roku app reads this value and logs a warning if the received version
+  // exceeds the version it was built to understand.
+  //
+  // Version history:
+  //   1 — initial shape: featureFlags, adSettings, theme, branding
+  //
+  // When to bump:
+  //   - Renaming a top-level key (e.g. featureFlags → features)
+  //   - Removing a key that the Roku app reads
+  //   - Changing the type of an existing key
+  //   - Adding a new required key (optional additions do NOT require a bump)
+  const CONFIG_SCHEMA_VERSION = 1;
+
   // GET /api/roku/config/:slug.json — Channel config for Roku app
   app.get("/api/roku/config/:slug", async (req, res) => {
     try {
@@ -95,6 +111,9 @@ async function startServer() {
         return;
       }
       const config = {
+        // configVersion must always be the first field so it is visible at the
+        // top of the response in browser dev tools and curl output.
+        configVersion: CONFIG_SCHEMA_VERSION,
         channelId: channel.id,
         name: channel.name,
         slug: channel.slug,
@@ -102,6 +121,10 @@ async function startServer() {
         contentRating: channel.contentRating,
         feedUrl: `/api/roku/feed/${slug}.json`,
         theme: channel.themeJson ?? {},
+        // featureFlags is the current key name.  If this is ever renamed,
+        // bump CONFIG_SCHEMA_VERSION and add the old name as a deprecated alias
+        // in ConfigMapper.brs (_resolveFeatureFlags) so existing Roku apps
+        // continue to work until they are updated.
         featureFlags: channel.featureFlagsJson ?? {},
         adSettings: channel.adSettingsJson ?? {},
       };
