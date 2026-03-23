@@ -18,6 +18,68 @@ import { Plus, Search, Tv, Radio, ExternalLink, Settings, ToggleLeft, ToggleRigh
 import { useState } from "react";
 import { useLocation } from "wouter";
 
+// ─── Channel logo helpers ────────────────────────────────────────────────────
+
+/** Extract logoUrl from a channel's brandingJson field (stored as JSON string or object). */
+function getLogoUrl(brandingJson: unknown): string | null {
+  if (!brandingJson) return null;
+  try {
+    const b = typeof brandingJson === "string" ? JSON.parse(brandingJson) : brandingJson;
+    return (b as Record<string, unknown>).logoUrl as string ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Derive up to 2 initials from a channel name for the fallback avatar. */
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
+
+/**
+ * 40×40 channel logo thumbnail.
+ * Shows the uploaded logo image when available; falls back to a coloured
+ * initials avatar derived from the channel name.
+ */
+function ChannelLogo({ name, brandingJson }: { name: string; brandingJson: unknown }) {
+  const logoUrl = getLogoUrl(brandingJson);
+  const initials = getInitials(name);
+
+  // Deterministic hue from channel name so each channel gets a consistent colour
+  const hue = Array.from(name).reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 360;
+
+  if (logoUrl) {
+    return (
+      <div className="h-10 w-10 rounded-lg overflow-hidden shrink-0 border border-border bg-muted">
+        <img
+          src={logoUrl}
+          alt={`${name} logo`}
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            // If the image fails to load, hide it so the parent background shows
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="h-10 w-10 rounded-lg shrink-0 flex items-center justify-center text-xs font-bold text-white select-none"
+      style={{ background: `hsl(${hue} 55% 38%)` }}
+      title={name}
+    >
+      {initials}
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     active: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
@@ -143,10 +205,8 @@ export default function Channels() {
             <Card key={ch.id} className="bg-card border-border hover:border-primary/30 transition-colors group">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                      <Radio className="h-4 w-4 text-primary" />
-                    </div>
+                  <div className="flex items-center gap-2.5">
+                    <ChannelLogo name={ch.name} brandingJson={(ch as Record<string, unknown>).brandingJson ?? null} />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground truncate">{ch.name}</p>
                       <p className="text-xs text-muted-foreground font-mono">{ch.slug}</p>

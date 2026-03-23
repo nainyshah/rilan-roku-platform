@@ -208,3 +208,8 @@
 - [x] CMS Dashboard: real-time health check status indicator (polls /api/health every 60s, green/amber/red badge)
 - [x] Channel Detail Branding: dedicated logo upload control (S3 upload, stored in brandingJson.logoUrl, shown in channel selector)
 - [x] Roku: SettingsScene with Change Channel button (clears registry slug, relaunches ChannelSelectorScene)
+
+## Enhancements (2026-03-24 batch 2)
+- [x] Roku: Options menu entry for "Change Channel" (named entry in remote Options menu, not just gear icon)
+- [x] CMS Channels list: 40x40 logo thumbnail next to channel name (fallback to initials avatar)
+- [x] CMS Dashboard health indicator: rolling 24-hour uptime percentage next to status badge

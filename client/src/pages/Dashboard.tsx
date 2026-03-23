@@ -9,12 +9,42 @@ import { useState, useEffect, useCallback } from "react";
 // ─── Health check hook ────────────────────────────────────────────────────────
 type HealthStatus = "checking" | "ok" | "degraded" | "down";
 
+interface HealthEntry {
+  timestamp: Date;
+  status: HealthStatus;
+  latencyMs: number | null;
+  error: string | null;
+}
+
 interface HealthState {
   status: HealthStatus;
   latencyMs: number | null;
   serverTime: string | null;
   lastChecked: Date | null;
   error: string | null;
+  /** Rolling 24-hour uptime percentage (0-100), null until ≥2 checks recorded. */
+  uptimePct: number | null;
+  /** Last 10 check results for the history log. */
+  history: HealthEntry[];
+}
+
+// Maximum age of entries kept in the rolling window (24 hours in ms)
+const UPTIME_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Compute the rolling uptime percentage from a list of check entries.
+ *
+ * A check is counted as "up" when its status is "ok" or "degraded".
+ * "down" and "checking" entries count as outages.
+ *
+ * We need at least 2 entries to produce a meaningful percentage.
+ */
+function computeUptimePct(history: HealthEntry[]): number | null {
+  const now = Date.now();
+  const window = history.filter((e) => now - e.timestamp.getTime() <= UPTIME_WINDOW_MS);
+  if (window.length < 2) return null;
+  const up = window.filter((e) => e.status === "ok" || e.status === "degraded").length;
+  return Math.round((up / window.length) * 1000) / 10; // one decimal place
 }
 
 function useHealthCheck(intervalMs = 60_000) {
@@ -24,6 +54,8 @@ function useHealthCheck(intervalMs = 60_000) {
     serverTime: null,
     lastChecked: null,
     error: null,
+    uptimePct: null,
+    history: [],
   });
 
   const check = useCallback(async () => {
@@ -31,31 +63,48 @@ function useHealthCheck(intervalMs = 60_000) {
     try {
       const res = await fetch("/api/health", { cache: "no-store" });
       const latencyMs = Math.round(performance.now() - start);
-      if (res.ok) {
-        const body = await res.json();
-        setHealth({
-          status: latencyMs > 2000 ? "degraded" : "ok",
+      const newStatus: HealthStatus = res.ok
+        ? latencyMs > 2000 ? "degraded" : "ok"
+        : res.status >= 500 ? "down" : "degraded";
+      const body = res.ok ? await res.json() : null;
+
+      setHealth((prev) => {
+        const entry: HealthEntry = {
+          timestamp: new Date(),
+          status: newStatus,
           latencyMs,
-          serverTime: body.serverTime ?? null,
-          lastChecked: new Date(),
-          error: null,
-        });
-      } else {
-        setHealth({
-          status: res.status >= 500 ? "down" : "degraded",
-          latencyMs: Math.round(performance.now() - start),
-          serverTime: null,
-          lastChecked: new Date(),
-          error: `HTTP ${res.status}`,
-        });
-      }
+          error: res.ok ? null : `HTTP ${res.status}`,
+        };
+        // Append new entry; keep only the last 1440 entries (24 h at 1-min intervals)
+        const allHistory = [...prev.history, entry].slice(-1440);
+        return {
+          status: newStatus,
+          latencyMs,
+          serverTime: body?.serverTime ?? null,
+          lastChecked: entry.timestamp,
+          error: entry.error,
+          uptimePct: computeUptimePct(allHistory),
+          history: allHistory,
+        };
+      });
     } catch (err) {
-      setHealth({
-        status: "down",
-        latencyMs: null,
-        serverTime: null,
-        lastChecked: new Date(),
-        error: err instanceof Error ? err.message : "Network error",
+      setHealth((prev) => {
+        const entry: HealthEntry = {
+          timestamp: new Date(),
+          status: "down",
+          latencyMs: null,
+          error: err instanceof Error ? err.message : "Network error",
+        };
+        const allHistory = [...prev.history, entry].slice(-1440);
+        return {
+          status: "down",
+          latencyMs: null,
+          serverTime: null,
+          lastChecked: entry.timestamp,
+          error: entry.error,
+          uptimePct: computeUptimePct(allHistory),
+          history: allHistory,
+        };
       });
     }
   }, []);
@@ -69,7 +118,7 @@ function useHealthCheck(intervalMs = 60_000) {
   return { health, refresh: check };
 }
 
-// ─── Health badge component ───────────────────────────────────────────────────
+// ─── Health badge component ────────────────────────────────────────────────────────
 function HealthBadge({ health, onRefresh }: { health: HealthState; onRefresh: () => void }) {
   const configs: Record<HealthStatus, { label: string; dot: string; text: string; border: string; bg: string }> = {
     checking: { label: "Checking…",  dot: "bg-zinc-400 animate-pulse",  text: "text-zinc-400",   border: "border-zinc-500/30",   bg: "bg-zinc-500/10" },
@@ -79,12 +128,28 @@ function HealthBadge({ health, onRefresh }: { health: HealthState; onRefresh: ()
   };
   const c = configs[health.status];
 
+  // Colour the uptime percentage: green ≥99%, amber 95-99%, red <95%
+  const uptimeColor =
+    health.uptimePct === null ? "text-muted-foreground"
+    : health.uptimePct >= 99  ? "text-emerald-400"
+    : health.uptimePct >= 95  ? "text-amber-400"
+    : "text-red-400";
+
   return (
     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${c.border} ${c.bg}`}>
       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.dot}`} />
       <span className={`text-xs font-medium ${c.text}`}>{c.label}</span>
       {health.latencyMs !== null && (
         <span className="text-xs text-muted-foreground">{health.latencyMs} ms</span>
+      )}
+      {/* Rolling 24-hour uptime percentage — shown once ≥2 checks are recorded */}
+      {health.uptimePct !== null && (
+        <span
+          className={`text-xs font-medium hidden sm:inline ${uptimeColor}`}
+          title={`Rolling 24-hour uptime based on ${health.history.length} check${health.history.length !== 1 ? "s" : ""}`}
+        >
+          · {health.uptimePct.toFixed(1)}% uptime
+        </span>
       )}
       {health.lastChecked && (
         <span className="text-xs text-muted-foreground hidden sm:inline">
