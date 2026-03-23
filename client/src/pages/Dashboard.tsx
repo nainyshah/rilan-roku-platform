@@ -31,6 +31,47 @@ interface HealthState {
 // Maximum age of entries kept in the rolling window (24 hours in ms)
 const UPTIME_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/** localStorage key for persisted health check history. */
+const HEALTH_HISTORY_KEY = "rilan_health_history";
+
+/**
+ * Serialise HealthEntry[] to localStorage.
+ * Timestamps are stored as ISO strings and restored as Date objects on read.
+ * Silently no-ops if localStorage is unavailable (e.g. private browsing).
+ */
+function saveHealthHistory(history: HealthEntry[]): void {
+  try {
+    // Prune to 24-hour window before saving to keep storage size bounded
+    const now = Date.now();
+    const pruned = history.filter((e) => now - e.timestamp.getTime() <= UPTIME_WINDOW_MS);
+    localStorage.setItem(HEALTH_HISTORY_KEY, JSON.stringify(
+      pruned.map((e) => ({ ...e, timestamp: e.timestamp.toISOString() }))
+    ));
+  } catch {
+    // localStorage may be blocked in some browser configurations — ignore silently
+  }
+}
+
+/**
+ * Restore HealthEntry[] from localStorage.
+ * Returns an empty array if nothing is stored or the data is malformed.
+ * Entries older than 24 hours are discarded on load.
+ */
+function loadHealthHistory(): HealthEntry[] {
+  try {
+    const raw = localStorage.getItem(HEALTH_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed: Array<{ timestamp: string; status: HealthStatus; latencyMs: number | null; error: string | null }> =
+      JSON.parse(raw);
+    const now = Date.now();
+    return parsed
+      .map((e) => ({ ...e, timestamp: new Date(e.timestamp) }))
+      .filter((e) => now - e.timestamp.getTime() <= UPTIME_WINDOW_MS);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Compute the rolling uptime percentage from a list of check entries.
  *
@@ -48,14 +89,21 @@ function computeUptimePct(history: HealthEntry[]): number | null {
 }
 
 function useHealthCheck(intervalMs = 60_000) {
-  const [health, setHealth] = useState<HealthState>({
-    status: "checking",
-    latencyMs: null,
-    serverTime: null,
-    lastChecked: null,
-    error: null,
-    uptimePct: null,
-    history: [],
+  const [health, setHealth] = useState<HealthState>(() => {
+    // Hydrate from localStorage on first mount so uptime % is immediately available
+    const savedHistory = loadHealthHistory();
+    return {
+      status: "checking",
+      latencyMs: null,
+      serverTime: null,
+      // Restore lastChecked from the most recent saved entry if available
+      lastChecked: savedHistory.length > 0
+        ? savedHistory[savedHistory.length - 1].timestamp
+        : null,
+      error: null,
+      uptimePct: computeUptimePct(savedHistory),
+      history: savedHistory,
+    };
   });
 
   const check = useCallback(async () => {
@@ -77,6 +125,8 @@ function useHealthCheck(intervalMs = 60_000) {
         };
         // Append new entry; keep only the last 1440 entries (24 h at 1-min intervals)
         const allHistory = [...prev.history, entry].slice(-1440);
+        // Persist to localStorage so uptime % survives page reloads
+        saveHealthHistory(allHistory);
         return {
           status: newStatus,
           latencyMs,
@@ -96,6 +146,8 @@ function useHealthCheck(intervalMs = 60_000) {
           error: err instanceof Error ? err.message : "Network error",
         };
         const allHistory = [...prev.history, entry].slice(-1440);
+        // Persist failure entries too so outages are reflected in the uptime %
+        saveHealthHistory(allHistory);
         return {
           status: "down",
           latencyMs: null,

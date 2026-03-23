@@ -213,3 +213,8 @@
 - [x] Roku: Options menu entry for "Change Channel" (named entry in remote Options menu, not just gear icon)
 - [x] CMS Channels list: 40x40 logo thumbnail next to channel name (fallback to initials avatar)
 - [x] CMS Dashboard health indicator: rolling 24-hour uptime percentage next to status badge
+
+## Enhancements (2026-03-24 batch 3)
+- [x] CMS Dashboard: persist health check history in localStorage (uptime % survives page reloads)
+- [x] Roku ChannelSelectorScene: render logo thumbnails from discovery endpoint (hdPosterUrl on ContentNode — already implemented in v7; confirmed no changes needed)
+- [x] Roku CategoryScene + DetailsScene: Options menu with Settings + Change Channel entries
