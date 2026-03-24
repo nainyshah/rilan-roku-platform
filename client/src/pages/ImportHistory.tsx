@@ -353,7 +353,7 @@ export default function ImportHistory() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-6xl">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4 flex-wrap">
           <Link href="/import">

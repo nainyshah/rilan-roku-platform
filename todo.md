@@ -225,3 +225,9 @@
 - [x] Import History page: table layout, detail drawer, re-import flow
 - [x] Publishing page: channel cards, schedule picker, cache badge, approve/publish actions
 - [x] Webhooks page: delivery dashboard layout, stats cards, log table, retry buttons
+
+## Layout Overflow Fixes (2026-03-24)
+- [x] ImportHistory: fix content overflowing outside DashboardLayout main area
+- [x] ImportVideos: fix content overflowing outside DashboardLayout main area
+- [x] Publishing: fix content overflowing outside DashboardLayout main area
+- [x] Webhooks: fix content overflowing outside DashboardLayout main area

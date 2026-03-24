@@ -475,7 +475,7 @@ export default function ImportVideos() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-6xl">
+      <div className="space-y-6">
         {/* Re-import loading overlay */}
         {reimportLoading && reimportLogId && (
           <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm">
