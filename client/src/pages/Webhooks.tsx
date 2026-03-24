@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -80,6 +81,18 @@ const WEBHOOK_EVENTS = [
   { value: "video.published", label: "Video Published" },
   { value: "video.archived", label: "Video Archived" },
 ] as const;
+
+const SIGNATURE_CODE = `// Node.js verification example
+const crypto = require('crypto');
+const sig = req.headers['x-roku-signature'];
+const expected = 'sha256=' + crypto
+  .createHmac('sha256', YOUR_SECRET)
+  .update(req.body) // raw Buffer
+  .digest('hex');
+const valid = crypto.timingSafeEqual(
+  Buffer.from(expected),
+  Buffer.from(sig)
+);`;
 
 // ── Form Schema ────────────────────────────────────────────────────────────
 
@@ -156,14 +169,14 @@ function DeliveryRow({
           </CollapsibleTrigger>
         </TableCell>
         {d.webhookLabel !== undefined && (
-          <TableCell className="text-xs text-muted-foreground">{d.webhookLabel}</TableCell>
+          <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">{d.webhookLabel}</TableCell>
         )}
         <TableCell>
           <Badge variant="outline" className="text-xs font-mono">{d.event}</Badge>
         </TableCell>
         <TableCell><StatusBadge success={d.success} /></TableCell>
         <TableCell className="text-xs text-muted-foreground">{d.statusCode ?? "—"}</TableCell>
-        <TableCell className="text-xs text-muted-foreground">Attempt {d.attempt}</TableCell>
+        <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">Attempt {d.attempt}</TableCell>
         <TableCell className="text-xs text-muted-foreground" title={formatDate(d.deliveredAt)}>
           {formatRelative(d.deliveredAt)}
         </TableCell>
@@ -275,7 +288,7 @@ function DeliveryDashboard({ channelId }: { channelId: number }) {
         </div>
       </div>
 
-      {/* Per-webhook breakdown */}
+      {/* Per-webhook breakdown — wraps gracefully at narrow widths */}
       <div className="space-y-2">
         <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Per-Webhook Status</h3>
         {stats.configs.map((cfg) => {
@@ -283,9 +296,10 @@ function DeliveryDashboard({ channelId }: { channelId: number }) {
             ? Math.round((cfg.successCount / cfg.totalDeliveries) * 100)
             : null;
           return (
-            <div key={cfg.id} className="flex items-center gap-3 bg-muted/20 rounded-lg px-3 py-2.5 border border-border">
+            <div key={cfg.id} className="flex flex-col sm:flex-row sm:items-center gap-3 bg-muted/20 rounded-lg px-3 py-2.5 border border-border">
+              {/* Label + URL */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-foreground truncate">{cfg.label}</span>
                   <Badge
                     variant="outline"
@@ -298,20 +312,22 @@ function DeliveryDashboard({ channelId }: { channelId: number }) {
                 </div>
                 <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{cfg.url}</p>
               </div>
-              <div className="flex items-center gap-4 shrink-0 text-xs">
-                <div className="text-center">
+
+              {/* Stats — scrollable row on very small screens */}
+              <div className="flex items-center gap-4 shrink-0 text-xs overflow-x-auto">
+                <div className="text-center shrink-0">
                   <p className="text-muted-foreground">Total</p>
                   <p className="font-medium text-foreground">{cfg.totalDeliveries}</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center shrink-0">
                   <p className="text-emerald-400">OK</p>
                   <p className="font-medium text-emerald-400">{cfg.successCount}</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center shrink-0">
                   <p className="text-red-400">Fail</p>
                   <p className="font-medium text-red-400">{cfg.failedCount}</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center shrink-0">
                   <p className="text-muted-foreground">Rate</p>
                   <p className={`font-medium ${
                     cfgRate === null ? "text-muted-foreground"
@@ -322,7 +338,7 @@ function DeliveryDashboard({ channelId }: { channelId: number }) {
                     {cfgRate !== null ? `${cfgRate}%` : "—"}
                   </p>
                 </div>
-                <div className="text-center">
+                <div className="text-center shrink-0">
                   <p className="text-muted-foreground">Last</p>
                   <p className="font-medium text-foreground">{formatRelative(cfg.lastDeliveredAt)}</p>
                 </div>
@@ -330,7 +346,7 @@ function DeliveryDashboard({ channelId }: { channelId: number }) {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 h-7 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                    className="gap-1.5 h-7 text-xs text-amber-400 border-amber-500/30 hover:bg-amber-500/10 shrink-0"
                     onClick={() => retryAllFailed.mutate({ webhookId: cfg.id })}
                     disabled={retryAllFailed.isPending}
                   >
@@ -365,30 +381,32 @@ function DeliveryDashboard({ channelId }: { channelId: number }) {
             </Button>
           </div>
           <div className="border border-border rounded-md overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-xs w-12">#</TableHead>
-                  <TableHead className="text-xs">Webhook</TableHead>
-                  <TableHead className="text-xs">Event</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">HTTP</TableHead>
-                  <TableHead className="text-xs">Attempt</TableHead>
-                  <TableHead className="text-xs">Delivered</TableHead>
-                  <TableHead className="text-xs w-20">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.recentDeliveries.map((d) => (
-                  <DeliveryRow
-                    key={d.id}
-                    d={d}
-                    onRetry={!d.success ? (id) => retryDelivery.mutate({ deliveryId: id }) : undefined}
-                    isRetrying={retryDelivery.isPending}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-xs w-12">#</TableHead>
+                    <TableHead className="text-xs">Webhook</TableHead>
+                    <TableHead className="text-xs">Event</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">HTTP</TableHead>
+                    <TableHead className="text-xs hidden sm:table-cell">Attempt</TableHead>
+                    <TableHead className="text-xs">Delivered</TableHead>
+                    <TableHead className="text-xs w-20">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.recentDeliveries.map((d) => (
+                    <DeliveryRow
+                      key={d.id}
+                      d={d}
+                      onRetry={!d.success ? (id) => retryDelivery.mutate({ deliveryId: id }) : undefined}
+                      isRetrying={retryDelivery.isPending}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
           {stats.failedCount > 0 && (
             <div className="flex items-center gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
@@ -462,6 +480,9 @@ function WebhookCard({
     }
   })();
 
+  // Suppress unused warning — channelId may be used for future per-card queries
+  void channelId;
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-3">
@@ -507,12 +528,14 @@ function WebhookCard({
             <button
               onClick={() => setShowSecret((v) => !v)}
               className="text-muted-foreground hover:text-foreground"
+              aria-label={showSecret ? "Hide secret" : "Show secret"}
             >
               {showSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
             </button>
             <button
               onClick={() => { navigator.clipboard.writeText(cfg.secret!); toast.success("Secret copied"); }}
               className="text-muted-foreground hover:text-foreground"
+              aria-label="Copy secret"
             >
               <Copy className="w-3 h-3" />
             </button>
@@ -566,29 +589,31 @@ function WebhookCard({
             {!deliveries || deliveries.length === 0 ? (
               <p className="text-xs text-muted-foreground p-3 text-center">No deliveries yet</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs w-12">#</TableHead>
-                    <TableHead className="text-xs">Event</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                    <TableHead className="text-xs">HTTP</TableHead>
-                    <TableHead className="text-xs">Attempt</TableHead>
-                    <TableHead className="text-xs">Delivered</TableHead>
-                    <TableHead className="text-xs w-20">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {deliveries.map((d) => (
-                    <DeliveryRow
-                      key={d.id}
-                      d={d}
-                      onRetry={!d.success ? (id) => retryDelivery.mutate({ deliveryId: id }) : undefined}
-                      isRetrying={retryDelivery.isPending}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-xs w-12">#</TableHead>
+                      <TableHead className="text-xs">Event</TableHead>
+                      <TableHead className="text-xs">Status</TableHead>
+                      <TableHead className="text-xs">HTTP</TableHead>
+                      <TableHead className="text-xs hidden sm:table-cell">Attempt</TableHead>
+                      <TableHead className="text-xs">Delivered</TableHead>
+                      <TableHead className="text-xs w-20">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deliveries.map((d) => (
+                      <DeliveryRow
+                        key={d.id}
+                        d={d}
+                        onRetry={!d.success ? (id) => retryDelivery.mutate({ deliveryId: id }) : undefined}
+                        isRetrying={retryDelivery.isPending}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </div>
         )}
@@ -604,7 +629,7 @@ export default function Webhooks() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<WebhookCfg | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<"configs" | "dashboard">("configs");
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const { data: channels } = trpc.channels.list.useQuery();
 
@@ -694,11 +719,18 @@ export default function Webhooks() {
     }
   }
 
+  function copyCode() {
+    navigator.clipboard.writeText(SIGNATURE_CODE);
+    setCodeCopied(true);
+    toast.success("Code copied");
+    setTimeout(() => setCodeCopied(false), 2000);
+  }
+
   const selectedChannel = channels?.find((c) => c.id === selectedChannelId);
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
@@ -710,7 +742,7 @@ export default function Webhooks() {
               Notify external services when Roku feed content changes. Payloads are HMAC-SHA256 signed.
             </p>
           </div>
-          {selectedChannelId && activeTab === "configs" && (
+          {selectedChannelId && (
             <Button onClick={openCreate} className="gap-2">
               <Plus className="w-4 h-4" />
               Add Webhook
@@ -718,109 +750,99 @@ export default function Webhooks() {
           )}
         </div>
 
-        {/* Channel selector */}
-        <Card className="bg-card border-border">
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <Label className="text-sm shrink-0">Channel</Label>
-              <Select
-                value={selectedChannelId?.toString() ?? ""}
-                onValueChange={(v) => setSelectedChannelId(Number(v))}
-              >
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="Select a channel…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {channels?.map((ch) => (
-                    <SelectItem key={ch.id} value={ch.id.toString()}>
-                      {ch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedChannel && (
-                <Badge variant="outline" className="text-xs font-mono">{selectedChannel.slug}</Badge>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Compact inline channel selector — no card wrapper */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Label className="text-sm text-muted-foreground shrink-0">Channel</Label>
+          <Select
+            value={selectedChannelId?.toString() ?? ""}
+            onValueChange={(v) => setSelectedChannelId(Number(v))}
+          >
+            <SelectTrigger className="w-56 h-8 text-sm">
+              <SelectValue placeholder="Select a channel…" />
+            </SelectTrigger>
+            <SelectContent>
+              {channels?.map((ch) => (
+                <SelectItem key={ch.id} value={ch.id.toString()}>
+                  {ch.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedChannel && (
+            <Badge variant="outline" className="text-xs font-mono">{selectedChannel.slug}</Badge>
+          )}
+        </div>
 
-        {/* Tab switcher */}
-        {selectedChannelId && (
-          <div className="flex gap-1 bg-muted/40 rounded-lg p-1 w-fit">
-            <button
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                activeTab === "configs"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              onClick={() => setActiveTab("configs")}
-            >
-              Configurations
-            </button>
-            <button
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                activeTab === "dashboard"
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              onClick={() => setActiveTab("dashboard")}
-            >
-              <Activity className="w-3.5 h-3.5" />
-              Delivery Dashboard
-            </button>
-          </div>
-        )}
-
-        {/* Webhook list */}
-        {selectedChannelId && activeTab === "configs" && (
-          <>
-            {!webhooks || webhooks.length === 0 ? (
-              <Card className="bg-card border-border">
-                <CardContent className="py-12 text-center">
-                  <Webhook className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-muted-foreground text-sm">No webhooks configured for this channel.</p>
-                  <Button onClick={openCreate} className="mt-4 gap-2" size="sm">
-                    <Plus className="w-4 h-4" /> Add your first webhook
-                  </Button>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {webhooks.map((cfg) => (
-                  <WebhookCard
-                    key={cfg.id}
-                    cfg={cfg}
-                    channelId={selectedChannelId}
-                    onEdit={openEdit}
-                    onDelete={setDeletingId}
-                    onRefresh={refetchWebhooks}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Delivery Dashboard tab */}
-        {selectedChannelId && activeTab === "dashboard" && (
+        {/* No channel selected — prompt */}
+        {!selectedChannelId && (
           <Card className="bg-card border-border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Activity className="w-4 h-4 text-primary" />
-                Delivery Monitoring Dashboard
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Real-time delivery stats and retry controls for all webhooks on this channel. Auto-refreshes every 30s.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DeliveryDashboard channelId={selectedChannelId} />
+            <CardContent className="py-12 text-center">
+              <Webhook className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-muted-foreground text-sm">Select a channel above to manage its webhooks.</p>
             </CardContent>
           </Card>
         )}
 
-        {/* Signing info card */}
+        {/* Tabs — only shown when a channel is selected */}
+        {selectedChannelId && (
+          <Tabs defaultValue="configs">
+            <TabsList className="w-fit">
+              <TabsTrigger value="configs">Configurations</TabsTrigger>
+              <TabsTrigger value="dashboard" className="gap-1.5">
+                <Activity className="w-3.5 h-3.5" />
+                Delivery Dashboard
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Configurations tab */}
+            <TabsContent value="configs" className="mt-4">
+              {!webhooks || webhooks.length === 0 ? (
+                <Card className="bg-card border-border">
+                  <CardContent className="py-12 text-center">
+                    <Webhook className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground text-sm">No webhooks configured for this channel.</p>
+                    <Button onClick={openCreate} className="mt-4 gap-2" size="sm">
+                      <Plus className="w-4 h-4" /> Add your first webhook
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {webhooks.map((cfg) => (
+                    <WebhookCard
+                      key={cfg.id}
+                      cfg={cfg}
+                      channelId={selectedChannelId}
+                      onEdit={openEdit}
+                      onDelete={setDeletingId}
+                      onRefresh={refetchWebhooks}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Delivery Dashboard tab */}
+            <TabsContent value="dashboard" className="mt-4">
+              <Card className="bg-card border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-primary" />
+                    Delivery Monitoring Dashboard
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Real-time delivery stats and retry controls for all webhooks on this channel. Auto-refreshes every 30s.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DeliveryDashboard channelId={selectedChannelId} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {/* Signing info card — with copy button on code block */}
         <Card className="bg-card border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Webhook Signature Verification</CardTitle>
@@ -830,19 +852,22 @@ export default function Webhooks() {
               Every delivery includes an <code className="bg-muted px-1 rounded">X-Roku-Signature</code> header
               with an HMAC-SHA256 digest of the request body, signed with your webhook secret.
             </p>
-            <pre className="bg-black/30 rounded p-3 text-xs font-mono text-muted-foreground overflow-x-auto">
-{`// Node.js verification example
-const crypto = require('crypto');
-const sig = req.headers['x-roku-signature'];
-const expected = 'sha256=' + crypto
-  .createHmac('sha256', YOUR_SECRET)
-  .update(req.body) // raw Buffer
-  .digest('hex');
-const valid = crypto.timingSafeEqual(
-  Buffer.from(expected),
-  Buffer.from(sig)
-);`}
-            </pre>
+            <div className="relative group">
+              <pre className="bg-black/30 rounded p-3 text-xs font-mono text-muted-foreground overflow-x-auto">
+                {SIGNATURE_CODE}
+              </pre>
+              <button
+                onClick={copyCode}
+                className="absolute top-2 right-2 p-1.5 rounded bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
+                aria-label="Copy code"
+              >
+                {codeCopied ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -876,7 +901,7 @@ const valid = crypto.timingSafeEqual(
             </div>
 
             <div className="space-y-1.5">
-              <Label>Signing Secret</Label>
+              <Label>Secret (optional)</Label>
               <Input {...form.register("secret")} placeholder="Optional — leave blank to skip signing" />
               <p className="text-xs text-muted-foreground">
                 Used to generate <code>X-Roku-Signature</code> header for verification.

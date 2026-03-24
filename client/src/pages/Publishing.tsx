@@ -1,10 +1,25 @@
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
   Radio,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   AlertTriangle,
   ExternalLink,
@@ -16,6 +31,7 @@ import {
   Database,
   Zap,
   Clock,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -97,7 +113,7 @@ export default function Publishing() {
   // Cache status for all channels
   const { data: cacheStatuses, refetch: refetchCache } =
     trpc.feed.channelCacheStatuses.useQuery(undefined, {
-      refetchInterval: 15000, // auto-refresh every 15s
+      refetchInterval: 15000,
     });
 
   const cacheMap = new Map(
@@ -126,7 +142,7 @@ export default function Publishing() {
       }));
       setValidating(null);
       toast.success(
-        `${data.channelName}: ${data.feedReady ? "Feed ready" : "Issues found"}`
+        `${data.channelName}: ${data.feedReady ? "Feed ready ✓" : "Issues found"}`
       );
     },
     onError: (e) => {
@@ -166,6 +182,7 @@ export default function Publishing() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Page header */}
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Publishing
@@ -223,42 +240,34 @@ export default function Publishing() {
                 <Radio className="h-8 w-8 mx-auto mb-2 animate-pulse opacity-40" />
                 <p className="text-sm">Loading channels...</p>
               </div>
+            ) : !channels || channels.length === 0 ? (
+              <div className="p-12 text-center text-muted-foreground">
+                <Radio className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium text-foreground mb-1">No channels yet</p>
+                <p className="text-xs">Create a channel to start publishing Roku feeds.</p>
+              </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3">
-                        Channel
-                      </th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3">
-                        Status
-                      </th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden lg:table-cell">
-                        Cache
-                      </th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden md:table-cell">
-                        Feed Health
-                      </th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3">
-                        Feed URL
-                      </th>
-                      <th className="text-right text-xs text-muted-foreground font-medium px-4 py-3">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {channels?.map((ch) => {
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-4">Channel</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="hidden lg:table-cell">Cache</TableHead>
+                      <TableHead className="hidden md:table-cell">Feed Health</TableHead>
+                      <TableHead>Feed URL</TableHead>
+                      <TableHead className="text-right pr-4">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {channels.map((ch) => {
                       const vr = validationResults[ch.id];
                       const cs = cacheMap.get(ch.id);
+                      const isValidating = validating === ch.id;
                       return (
-                        <tr
-                          key={ch.id}
-                          className="border-b border-border/50 hover:bg-muted/20 transition-colors"
-                        >
+                        <TableRow key={ch.id} className="hover:bg-muted/20">
                           {/* Channel name */}
-                          <td className="px-4 py-4">
+                          <TableCell className="pl-4 py-3">
                             <div className="flex items-center gap-2">
                               <div className="h-7 w-7 rounded bg-primary/10 flex items-center justify-center shrink-0">
                                 <Radio className="h-3.5 w-3.5 text-primary" />
@@ -272,78 +281,81 @@ export default function Publishing() {
                                 </p>
                               </div>
                             </div>
-                          </td>
+                          </TableCell>
 
                           {/* Active/inactive toggle */}
-                          <td className="px-4 py-4">
+                          <TableCell className="py-3">
                             <div className="flex items-center gap-2">
-                              <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                              <Badge
+                                variant="outline"
+                                className={
                                   ch.status === "active"
                                     ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
                                     : ch.status === "inactive"
                                     ? "bg-red-500/15 text-red-400 border-red-500/30"
                                     : "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
-                                }`}
-                              >
-                                {ch.status}
-                              </span>
-                              <button
-                                onClick={() => {
-                                  const next =
-                                    ch.status === "active"
-                                      ? "inactive"
-                                      : "active";
-                                  setStatusMutation.mutate({
-                                    id: ch.id,
-                                    status: next,
-                                  });
-                                }}
-                                className="text-muted-foreground hover:text-foreground transition-colors"
-                                title={
-                                  ch.status === "active"
-                                    ? "Deactivate"
-                                    : "Activate"
                                 }
                               >
-                                {ch.status === "active" ? (
-                                  <ToggleRight className="h-5 w-5 text-emerald-400" />
-                                ) : (
-                                  <ToggleLeft className="h-5 w-5" />
-                                )}
-                              </button>
+                                {ch.status}
+                              </Badge>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => {
+                                      const next =
+                                        ch.status === "active" ? "inactive" : "active";
+                                      setStatusMutation.mutate({ id: ch.id, status: next });
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                    aria-label={ch.status === "active" ? "Deactivate channel" : "Activate channel"}
+                                  >
+                                    {ch.status === "active" ? (
+                                      <ToggleRight className="h-5 w-5 text-emerald-400" />
+                                    ) : (
+                                      <ToggleLeft className="h-5 w-5" />
+                                    )}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {ch.status === "active" ? "Deactivate channel" : "Activate channel"}
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
-                          </td>
+                          </TableCell>
 
                           {/* Cache status */}
-                          <td className="px-4 py-4 hidden lg:table-cell">
+                          <TableCell className="py-3 hidden lg:table-cell">
                             <div className="flex items-center gap-2">
                               <CacheStatusBadge status={cs} />
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 w-6 p-0 shrink-0"
-                                title="Force Refresh — purge cache and regenerate feed"
-                                disabled={refreshing === ch.slug}
-                                onClick={() => handleForceRefresh(ch.id, ch.slug)}
-                              >
-                                <RefreshCw
-                                  className={`h-3 w-3 ${
-                                    refreshing === ch.slug
-                                      ? "animate-spin text-primary"
-                                      : "text-muted-foreground"
-                                  }`}
-                                />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 shrink-0"
+                                    disabled={refreshing === ch.slug}
+                                    onClick={() => handleForceRefresh(ch.id, ch.slug)}
+                                  >
+                                    <RefreshCw
+                                      className={`h-3 w-3 ${
+                                        refreshing === ch.slug
+                                          ? "animate-spin text-primary"
+                                          : "text-muted-foreground"
+                                      }`}
+                                    />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Force Refresh — purge cache and regenerate feed</TooltipContent>
+                              </Tooltip>
                             </div>
-                          </td>
+                          </TableCell>
 
                           {/* Feed health */}
-                          <td className="px-4 py-4 hidden md:table-cell">
+                          <TableCell className="py-3 hidden md:table-cell">
                             {vr ? (
                               <div className="flex items-center gap-2">
                                 {vr.feedReady ? (
-                                  <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
                                 ) : vr.invalidVideos > 0 ? (
                                   <XCircle className="h-4 w-4 text-red-400 shrink-0" />
                                 ) : (
@@ -353,163 +365,167 @@ export default function Publishing() {
                                   <span className="text-foreground">
                                     {vr.totalVideosInChannel} videos
                                   </span>
-                                  <span className="text-muted-foreground mx-1">
-                                    ·
-                                  </span>
+                                  <span className="text-muted-foreground mx-1">·</span>
                                   <span className="text-emerald-400">
                                     {vr.validVideos} valid
                                   </span>
                                   {vr.warnings > 0 && (
                                     <>
-                                      <span className="text-muted-foreground mx-1">
-                                        ·
-                                      </span>
-                                      <span className="text-amber-400">
-                                        {vr.warnings} warn
-                                      </span>
+                                      <span className="text-muted-foreground mx-1">·</span>
+                                      <span className="text-amber-400">{vr.warnings} warn</span>
                                     </>
                                   )}
                                   {vr.invalidVideos > 0 && (
                                     <>
-                                      <span className="text-muted-foreground mx-1">
-                                        ·
-                                      </span>
-                                      <span className="text-red-400">
-                                        {vr.invalidVideos} err
-                                      </span>
+                                      <span className="text-muted-foreground mx-1">·</span>
+                                      <span className="text-red-400">{vr.invalidVideos} err</span>
                                     </>
                                   )}
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-xs text-muted-foreground">
-                                Not validated
-                              </span>
+                              <span className="text-xs text-muted-foreground">Not validated</span>
                             )}
-                          </td>
+                          </TableCell>
 
                           {/* Feed URL */}
-                          <td className="px-4 py-4">
+                          <TableCell className="py-3">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono text-muted-foreground truncate max-w-[180px]">
+                              <span className="text-xs font-mono text-muted-foreground truncate max-w-[160px]">
                                 /api/roku/feed/{ch.slug}.json
                               </span>
-                              <button
-                                onClick={() => copyUrl(ch.slug)}
-                                className="text-muted-foreground hover:text-primary transition-colors shrink-0"
-                                title="Copy URL"
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </button>
-                              <a
-                                href={`/api/roku/feed/${ch.slug}.json`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-muted-foreground hover:text-primary transition-colors shrink-0"
-                                title="Open Feed"
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => copyUrl(ch.slug)}
+                                    className="text-muted-foreground hover:text-primary transition-colors shrink-0"
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>Copy feed URL</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <a
+                                    href={`/api/roku/feed/${ch.slug}.json`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-muted-foreground hover:text-primary transition-colors shrink-0"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                  </a>
+                                </TooltipTrigger>
+                                <TooltipContent>Open feed in new tab</TooltipContent>
+                              </Tooltip>
                             </div>
-                          </td>
+                          </TableCell>
 
                           {/* Actions */}
-                          <td className="px-4 py-4">
+                          <TableCell className="py-3 pr-4">
                             <div className="flex items-center justify-end gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs gap-1.5"
-                                onClick={() => handleValidate(ch.id)}
-                                disabled={validating === ch.id}
-                              >
-                                {validating === ch.id ? (
-                                  <RefreshCw className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <CheckCircle className="h-3 w-3" />
-                                )}
-                                Validate
-                              </Button>
+                              {/* Validate button — shows success state when validated */}
+                              {vr?.feedReady ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1.5 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                                  onClick={() => handleValidate(ch.id)}
+                                  disabled={isValidating}
+                                >
+                                  {isValidating ? (
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="h-3 w-3" />
+                                  )}
+                                  Feed Ready
+                                </Button>
+                              ) : vr && !vr.feedReady ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1.5 border-red-500/40 text-red-400 hover:bg-red-500/10"
+                                  onClick={() => handleValidate(ch.id)}
+                                  disabled={isValidating}
+                                >
+                                  {isValidating ? (
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <AlertTriangle className="h-3 w-3" />
+                                  )}
+                                  Re-validate
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1.5"
+                                  onClick={() => handleValidate(ch.id)}
+                                  disabled={isValidating}
+                                >
+                                  {isValidating ? (
+                                    <RefreshCw className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="h-3 w-3" />
+                                  )}
+                                  Validate
+                                </Button>
+                              )}
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Roku Setup Guide */}
-        <Card className="bg-card border-border">
+        {/* Roku Setup Guide — visually distinct with accent border */}
+        <Card className="border-l-4 border-l-primary bg-card border-border">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" />
               Roku Direct Publisher Setup Guide
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-xs text-muted-foreground">
-            <div className="space-y-2">
+          <CardContent className="space-y-4 text-xs text-muted-foreground">
+            <ol className="space-y-3">
               {[
-                {
-                  step: "1",
-                  text: "Log in to the Roku Developer Dashboard at developer.roku.com",
-                },
-                {
-                  step: "2",
-                  text: "Navigate to Direct Publisher and create a new channel",
-                },
-                {
-                  step: "3",
-                  text: "In the Content Feed section, enter your channel's feed URL from the table above",
-                },
-                {
-                  step: "4",
-                  text: "Ensure your channel is set to Active status so the feed returns content",
-                },
-                {
-                  step: "5",
-                  text: "Validate the feed using the Validate button — fix any errors before submitting to Roku",
-                },
-                {
-                  step: "6",
-                  text: "Submit your channel for Roku certification review",
-                },
-              ].map((item) => (
-                <div key={item.step} className="flex items-start gap-3">
-                  <span className="h-5 w-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold shrink-0">
-                    {item.step}
+                "Log in to the Roku Developer Dashboard at developer.roku.com",
+                "Navigate to Direct Publisher and create a new channel",
+                "In the Content Feed section, enter your channel's feed URL from the table above",
+                "Ensure your channel is set to Active status so the feed returns content",
+                "Validate the feed using the Validate button — fix any errors before submitting to Roku",
+                "Submit your channel for Roku certification review",
+              ].map((text, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="h-5 w-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                    {i + 1}
                   </span>
-                  <p>{item.text}</p>
-                </div>
+                  <p className="leading-relaxed">{text}</p>
+                </li>
               ))}
-            </div>
-            <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-              <p className="font-medium text-foreground mb-1">
-                Feed Requirements
-              </p>
-              <ul className="space-y-1">
-                <li>
-                  • Each video must have a title, thumbnail URL, stream URL, and
-                  duration
-                </li>
-                <li>
-                  • Stream URLs must be publicly accessible (MP4, HLS/M3U8, or
-                  DASH/MPD)
-                </li>
-                <li>
-                  • Thumbnails should be at least 800×450 pixels (16:9 aspect
-                  ratio)
-                </li>
-                <li>
-                  • Channel must be set to Active status for the feed to serve
-                  content
-                </li>
-                <li>
-                  • Use Force Refresh (↺ icon) to immediately purge the Redis
-                  cache and regenerate the feed after bulk changes
-                </li>
+            </ol>
+
+            {/* Feed requirements box */}
+            <div className="mt-2 p-3 bg-muted/40 rounded-lg border border-border">
+              <p className="font-semibold text-foreground mb-2 text-xs">Feed Requirements</p>
+              <ul className="space-y-1.5">
+                {[
+                  "Each video must have a title, thumbnail URL, stream URL, and duration",
+                  "Stream URLs must be publicly accessible (MP4, HLS/M3U8, or DASH/MPD)",
+                  "Thumbnails should be at least 800×450 pixels (16:9 aspect ratio)",
+                  "Channel must be set to Active status for the feed to serve content",
+                  "Use Force Refresh (↺ icon) to immediately purge the Redis cache and regenerate the feed after bulk changes",
+                ].map((req, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="text-primary mt-0.5">•</span>
+                    <span>{req}</span>
+                  </li>
+                ))}
               </ul>
             </div>
           </CardContent>

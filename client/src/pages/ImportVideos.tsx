@@ -95,6 +95,54 @@ interface ImportResult {
   videoId?: number;
 }
 
+// ─── Step indicator ───────────────────────────────────────────────────────────
+function StepIndicator({
+  steps,
+  current,
+}: {
+  steps: { label: string; description: string }[];
+  current: number; // 0-based index of the active step
+}) {
+  return (
+    <div className="flex items-start gap-0 mb-6">
+      {steps.map((step, i) => {
+        const isComplete = i < current;
+        const isActive = i === current;
+        return (
+          <div key={i} className="flex items-start flex-1 min-w-0">
+            {/* Step node */}
+            <div className="flex flex-col items-center shrink-0">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
+                  isComplete
+                    ? "bg-primary border-primary text-primary-foreground"
+                    : isActive
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "bg-muted/30 border-border text-muted-foreground"
+                }`}
+              >
+                {isComplete ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
+              </div>
+              <div className="mt-1.5 text-center px-1">
+                <p className={`text-xs font-medium leading-tight ${isActive ? "text-foreground" : isComplete ? "text-foreground" : "text-muted-foreground"}`}>
+                  {step.label}
+                </p>
+                <p className="text-xs text-muted-foreground leading-tight mt-0.5 hidden sm:block">
+                  {step.description}
+                </p>
+              </div>
+            </div>
+            {/* Connector line (not after last step) */}
+            {i < steps.length - 1 && (
+              <div className={`flex-1 h-0.5 mt-4 mx-1 transition-colors ${i < current ? "bg-primary" : "bg-border"}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
   if (status === "valid" || status === "imported")
@@ -233,6 +281,7 @@ export default function ImportVideos() {
   const [thumbnailSummary, setThumbnailSummary] = useState<ThumbnailValidationSummary | null>(null);
   const [streamSummary, setStreamSummary] = useState<StreamValidationSummary | null>(null);
   const [reimportBanner, setReimportBanner] = useState<string | null>(null);
+  const [resultsFilter, setResultsFilter] = useState<"all" | "imported" | "error" | "duplicate" | "skipped">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check for ?reimportLogId= query param (set by Import History page)
@@ -296,6 +345,7 @@ export default function ImportVideos() {
   const importMutation = trpc.import.bulkImport.useMutation({
     onSuccess: (data) => {
       setImportResults(data.results as ImportResult[]);
+      setResultsFilter("all");
       toast.success(
         `Import complete: ${data.importedCount} imported, ${data.skippedCount} skipped, ${data.errorCount} errors`
       );
@@ -317,6 +367,7 @@ export default function ImportVideos() {
       setParsedRows(null);
       setImportResults(null);
       setThumbnailSummary(null);
+      setStreamSummary(null);
     };
     reader.readAsText(file);
   }, []);
@@ -401,14 +452,30 @@ export default function ImportVideos() {
       }
     : null;
 
+  // Filtered import results
+  const filteredImportResults = importResults
+    ? resultsFilter === "all"
+      ? importResults
+      : importResults.filter((r) => r.status === resultsFilter)
+    : [];
+
   // Whether any row has a thumbnail check result (to show the column)
   const hasThumbnailChecks = parsedRows?.some((r) => r.thumbnailCheck !== undefined) ?? false;
   // Whether any row has a stream check result (to show the column)
   const hasStreamChecks = parsedRows?.some((r) => (r as any).streamCheck !== undefined) ?? false;
 
+  // Determine current step (0=upload, 1=preview, 2=results)
+  const currentStep = importResults ? 2 : parsedRows ? 1 : 0;
+
+  const STEPS = [
+    { label: "Upload CSV", description: "Select or drop file" },
+    { label: "Preview & Configure", description: "Review rows & settings" },
+    { label: "Import Results", description: "See what was imported" },
+  ];
+
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6 max-w-6xl">
+      <div className="space-y-6 max-w-6xl">
         {/* Re-import loading overlay */}
         {reimportLoading && reimportLogId && (
           <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 text-sm">
@@ -487,37 +554,44 @@ export default function ImportVideos() {
         )}
 
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <Link href="/videos">
             <Button variant="ghost" size="sm" className="gap-2">
               <ArrowLeft className="w-4 h-4" />
               Back to Videos
             </Button>
           </Link>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">Bulk Video Import</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Upload a CSV file to import multiple videos at once into your Roku channels.
             </p>
           </div>
-          <Link href="/import/history">
-            <Button variant="outline" size="sm" className="gap-2">
-              <HistoryIcon className="w-4 h-4" />
-              View History
+          <div className="flex gap-2 shrink-0">
+            <Link href="/import/history">
+              <Button variant="outline" size="sm" className="gap-2">
+                <HistoryIcon className="w-4 h-4" />
+                View History
+              </Button>
+            </Link>
+            <Button variant="outline" size="sm" onClick={downloadTemplate} className="gap-2">
+              <Download className="w-4 h-4" />
+              Template
             </Button>
-          </Link>
-          <Button variant="outline" size="sm" onClick={downloadTemplate} className="gap-2">
-            <Download className="w-4 h-4" />
-            Download Template
-          </Button>
+          </div>
         </div>
+
+        {/* Step indicator */}
+        <StepIndicator steps={STEPS} current={currentStep} />
 
         {/* Step 1: Upload */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-bold">
-                1
+              <span className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-bold ${
+                currentStep > 0 ? "bg-primary text-primary-foreground" : "bg-primary/20 text-primary"
+              }`}>
+                {currentStep > 0 ? <CheckCircle2 className="w-3.5 h-3.5" /> : "1"}
               </span>
               Upload CSV File
             </CardTitle>
@@ -534,12 +608,12 @@ export default function ImportVideos() {
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
+              className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-all ${
                 isDragging
-                  ? "border-primary bg-primary/5"
+                  ? "border-primary bg-primary/10 scale-[1.01]"
                   : csvText
                   ? "border-emerald-500/50 bg-emerald-500/5"
-                  : "border-border hover:border-primary/50 hover:bg-muted/30"
+                  : "border-border hover:border-primary/60 hover:bg-muted/40"
               }`}
             >
               <input
@@ -559,8 +633,10 @@ export default function ImportVideos() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <Upload className="w-10 h-10 text-muted-foreground mx-auto" />
-                  <p className="font-medium">Drop your CSV here or click to browse</p>
+                  <Upload className={`w-10 h-10 mx-auto transition-colors ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
+                  <p className={`font-medium transition-colors ${isDragging ? "text-primary" : ""}`}>
+                    {isDragging ? "Drop to upload" : "Drop your CSV here or click to browse"}
+                  </p>
                   <p className="text-xs text-muted-foreground">Supports .csv files only</p>
                 </div>
               )}
@@ -591,40 +667,40 @@ export default function ImportVideos() {
               )}
               {/* Validation toggles */}
               <div className="flex flex-wrap gap-4 ml-auto">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={validateThumbnails}
-                  onChange={(e) => setValidateThumbnails(e.target.checked)}
-                  className="w-4 h-4 accent-primary"
-                />
-                <span className="text-sm flex items-center gap-1.5">
-                  {validateThumbnails ? (
-                    <Eye className="w-3.5 h-3.5 text-primary" />
-                  ) : (
-                    <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
-                  )}
-                  Check thumbnail URLs
-                  <span className="text-muted-foreground text-xs">(adds ~5s per batch)</span>
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={validateStreamUrls}
-                  onChange={(e) => setValidateStreamUrls(e.target.checked)}
-                  className="w-4 h-4 accent-primary"
-                />
-                <span className="text-sm flex items-center gap-1.5">
-                  {validateStreamUrls ? (
-                    <Video className="w-3.5 h-3.5 text-primary" />
-                  ) : (
-                    <VideoOff className="w-3.5 h-3.5 text-muted-foreground" />
-                  )}
-                  Check stream URLs
-                  <span className="text-muted-foreground text-xs">(adds ~7s per batch)</span>
-                </span>
-              </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={validateThumbnails}
+                    onChange={(e) => setValidateThumbnails(e.target.checked)}
+                    className="w-4 h-4 accent-primary"
+                  />
+                  <span className="text-sm flex items-center gap-1.5">
+                    {validateThumbnails ? (
+                      <Eye className="w-3.5 h-3.5 text-primary" />
+                    ) : (
+                      <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+                    )}
+                    Check thumbnail URLs
+                    <span className="text-muted-foreground text-xs">(~5s)</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={validateStreamUrls}
+                    onChange={(e) => setValidateStreamUrls(e.target.checked)}
+                    className="w-4 h-4 accent-primary"
+                  />
+                  <span className="text-sm flex items-center gap-1.5">
+                    {validateStreamUrls ? (
+                      <Video className="w-3.5 h-3.5 text-primary" />
+                    ) : (
+                      <VideoOff className="w-3.5 h-3.5 text-muted-foreground" />
+                    )}
+                    Check stream URLs
+                    <span className="text-muted-foreground text-xs">(~7s)</span>
+                  </span>
+                </label>
               </div>
             </div>
           </CardContent>
@@ -686,9 +762,9 @@ export default function ImportVideos() {
         )}
 
         {/* Step 2: Preview & Configure */}
-        {parsedRows && (
+        {parsedRows && !importResults && (
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-bold">
                   2
@@ -792,8 +868,8 @@ export default function ImportVideos() {
                         <TableHead>Duration</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Channel</TableHead>
-                          {hasThumbnailChecks && <TableHead>Thumbnail</TableHead>}
-                          {hasStreamChecks && <TableHead>Stream</TableHead>}
+                        {hasThumbnailChecks && <TableHead>Thumbnail</TableHead>}
+                        {hasStreamChecks && <TableHead>Stream</TableHead>}
                         <TableHead>Status</TableHead>
                         <TableHead>Issues</TableHead>
                       </TableRow>
@@ -854,21 +930,30 @@ export default function ImportVideos() {
                 </div>
               </div>
 
-              <Button
-                onClick={handleImport}
-                disabled={importMutation.isPending || stats?.total === 0}
-                className="gap-2 w-full sm:w-auto"
-                size="lg"
-              >
-                {importMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Upload className="w-4 h-4" />
+              {/* Import button — prominent, full-width on mobile */}
+              <div className="flex items-center gap-3 pt-1">
+                <Button
+                  onClick={handleImport}
+                  disabled={importMutation.isPending || stats?.total === 0}
+                  size="lg"
+                  className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8"
+                >
+                  {importMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  {importMutation.isPending
+                    ? "Importing…"
+                    : `Import ${(stats?.valid ?? 0) + (stats?.warning ?? 0)} Video${((stats?.valid ?? 0) + (stats?.warning ?? 0)) !== 1 ? "s" : ""}`}
+                </Button>
+                {stats && stats.error > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {stats.error} row{stats.error !== 1 ? "s" : ""} with errors will be{" "}
+                    {skipErrors ? "skipped" : "cause the import to abort"}.
+                  </p>
                 )}
-                {importMutation.isPending
-                  ? "Importing…"
-                  : `Import ${(stats?.valid ?? 0) + (stats?.warning ?? 0)} Videos`}
-              </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -876,15 +961,15 @@ export default function ImportVideos() {
         {/* Step 3: Results */}
         {importResults && importStats && (
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold">
-                  3
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                 </span>
                 Import Results
               </CardTitle>
               <CardDescription>
-                {importStats.imported} videos imported successfully.
+                {importStats.imported} video{importStats.imported !== 1 ? "s" : ""} imported successfully.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -908,6 +993,30 @@ export default function ImportVideos() {
                 </div>
               </div>
 
+              {/* Results filter tabs */}
+              <div className="flex gap-1 bg-muted/40 rounded-lg p-1 w-fit flex-wrap">
+                {(["all", "imported", "error", "duplicate", "skipped"] as const).map((f) => {
+                  const count =
+                    f === "all"
+                      ? importResults.length
+                      : importResults.filter((r) => r.status === f).length;
+                  if (f !== "all" && count === 0) return null;
+                  return (
+                    <button
+                      key={f}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-colors capitalize ${
+                        resultsFilter === f
+                          ? "bg-card text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                      onClick={() => setResultsFilter(f)}
+                    >
+                      {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Results table */}
               <div className="rounded-lg border overflow-hidden">
                 <div className="overflow-x-auto max-h-80 overflow-y-auto">
@@ -921,7 +1030,7 @@ export default function ImportVideos() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {importResults.map((r) => (
+                      {filteredImportResults.map((r) => (
                         <TableRow
                           key={r.rowIndex}
                           className={

@@ -218,3 +218,10 @@
 - [x] CMS Dashboard: persist health check history in localStorage (uptime % survives page reloads)
 - [x] Roku ChannelSelectorScene: render logo thumbnails from discovery endpoint (hdPosterUrl on ContentNode — already implemented in v7; confirmed no changes needed)
 - [x] Roku CategoryScene + DetailsScene: Options menu with Settings + Change Channel entries
+
+## UI/UX Fixes (2026-03-24)
+- [x] Videos page: layout, filter bar, table density, empty state, bulk action bar polish
+- [x] Import Videos page: stepper clarity, drag-drop zone, validation feedback, preview table
+- [x] Import History page: table layout, detail drawer, re-import flow
+- [x] Publishing page: channel cards, schedule picker, cache badge, approve/publish actions
+- [x] Webhooks page: delivery dashboard layout, stats cards, log table, retry buttons

@@ -35,6 +35,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
   History,
@@ -108,7 +113,7 @@ function RowStatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Log summary row ──────────────────────────────────────────────────────────
+// ─── Log summary badges ───────────────────────────────────────────────────────
 function LogSummaryBadges({ log }: { log: ImportLog }) {
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -136,7 +141,7 @@ function LogSummaryBadges({ log }: { log: ImportLog }) {
   );
 }
 
-// ─── Detail drawer ────────────────────────────────────────────────────────────────────────
+// ─── Detail drawer ────────────────────────────────────────────────────────────
 function LogDetailDrawer({
   logId,
   open,
@@ -238,20 +243,20 @@ function LogDetailDrawer({
               </div>
             </div>
 
-            {/* CSV actions */}
-            <div className="flex gap-2 mb-6">
+            {/* CSV actions — Re-import is the primary CTA */}
+            <div className="flex gap-2 mb-2">
               <Button
                 onClick={handleReimport}
-                className="flex-1 gap-2"
+                className="flex-1 gap-2 font-semibold"
                 title="Load this CSV into the Import page to fix errors and re-run"
               >
                 <RefreshCw className="w-4 h-4" />
-                Re-import from this CSV
+                Re-import CSV
               </Button>
               {log.csvUrl ? (
                 <Button onClick={downloadCsv} variant="outline" className="gap-2">
                   <Download className="w-4 h-4" />
-                  Download CSV
+                  Download
                 </Button>
               ) : (
                 <Button variant="outline" disabled className="gap-2 opacity-50">
@@ -261,14 +266,14 @@ function LogDetailDrawer({
               )}
             </div>
             {!log.csvUrl && (
-              <p className="text-xs text-muted-foreground text-center -mt-4 mb-4">
-                Note: CSV file not available for download — storage upload may have failed for this run.
+              <p className="text-xs text-muted-foreground mb-4">
+                CSV file not available — storage upload may have failed for this run.
               </p>
             )}
 
             {/* Per-row results */}
             {results.length > 0 && (
-              <div>
+              <div className="mt-4">
                 <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4" />
                   Per-row Results
@@ -323,7 +328,7 @@ function LogDetailDrawer({
   );
 }
 
-// ─── Main page ───────────// ─── Main page ────────────────────────────────────────────
+// ─── Main page ────────────────────────────────────────────────────────────────
 export default function ImportHistory() {
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
@@ -348,16 +353,16 @@ export default function ImportHistory() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6 max-w-6xl">
+      <div className="space-y-6 max-w-6xl">
         {/* Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <Link href="/import">
             <Button variant="ghost" size="sm" className="gap-2">
               <ArrowLeft className="w-4 h-4" />
               Back to Import
             </Button>
           </Link>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               <History className="w-6 h-6 text-primary" />
               Import History
@@ -366,7 +371,7 @@ export default function ImportHistory() {
               Audit log of all past bulk video imports. Re-download original CSV files or review per-row results.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
               <RefreshCw className="w-4 h-4" />
               Refresh
@@ -380,12 +385,12 @@ export default function ImportHistory() {
           </div>
         </div>
 
-        {/* Summary stats */}
-        <div className="grid grid-cols-3 gap-4">
+        {/* Summary stats — responsive grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
             <CardContent className="pt-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                   <History className="w-5 h-5 text-primary" />
                 </div>
                 <div>
@@ -398,7 +403,7 @@ export default function ImportHistory() {
           <Card>
             <CardContent className="pt-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
@@ -411,7 +416,7 @@ export default function ImportHistory() {
           <Card>
             <CardContent className="pt-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
                   <XCircle className="w-5 h-5 text-red-400" />
                 </div>
                 <div>
@@ -428,7 +433,7 @@ export default function ImportHistory() {
           <CardHeader>
             <CardTitle className="text-base">Import Runs</CardTitle>
             <CardDescription>
-              Click any row to view details and re-download the original CSV.
+              Click any row to view details and per-row results. Use the Re-import button to re-run a previous CSV.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -450,100 +455,142 @@ export default function ImportHistory() {
               </div>
             ) : (
               <div className="rounded-lg border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Filename</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Imported by</TableHead>
-                      <TableHead>Total Rows</TableHead>
-                      <TableHead>Results</TableHead>
-                      <TableHead>CSV</TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {logs.map((log) => (
-                      <TableRow
-                        key={log.id}
-                        className="cursor-pointer hover:bg-muted/30"
-                        onClick={() => setSelectedLogId(log.id)}
-                      >
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                            <span className="font-medium max-w-[180px] truncate text-sm">
-                              {log.filename}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                          {new Date(log.createdAt).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {log.importedByName ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-sm font-mono">{log.totalRows}</TableCell>
-                        <TableCell>
-                          <LogSummaryBadges log={log as ImportLog} />
-                        </TableCell>
-                        <TableCell>
-                          {log.csvUrl ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="gap-1.5 h-7 px-2 text-xs text-primary hover:text-primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const a = document.createElement("a");
-                                a.href = log.csvUrl!;
-                                a.download = log.filename;
-                                a.target = "_blank";
-                                a.click();
-                              }}
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              CSV
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">N/A</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              onClick={() => setSelectedLogId(log.id)}
-                              title="View details"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-primary hover:text-primary"
-                              onClick={() => navigate(`/import?reimportLogId=${log.id}`)}
-                              title="Re-import from this CSV"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteTargetId(log.id)}
-                              title="Delete log"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Filename</TableHead>
+                        <TableHead>Date</TableHead>
+                        {/* "Imported by" hidden on small screens */}
+                        <TableHead className="hidden md:table-cell">Imported by</TableHead>
+                        <TableHead className="text-center">Rows</TableHead>
+                        <TableHead>Results</TableHead>
+                        {/* "CSV" column merged into Actions on small screens */}
+                        <TableHead className="hidden sm:table-cell text-center">CSV</TableHead>
+                        <TableHead className="w-28 text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {logs.map((log) => (
+                        <TableRow
+                          key={log.id}
+                          className="cursor-pointer hover:bg-muted/30"
+                          onClick={() => setSelectedLogId(log.id)}
+                        >
+                          {/* Filename */}
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                              <span className="font-medium max-w-[160px] truncate text-sm">
+                                {log.filename}
+                              </span>
+                            </div>
+                          </TableCell>
+
+                          {/* Date */}
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {new Date(log.createdAt).toLocaleDateString()}{" "}
+                            <span className="hidden lg:inline text-xs">
+                              {new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </TableCell>
+
+                          {/* Imported by (hidden on small) */}
+                          <TableCell className="text-sm hidden md:table-cell">
+                            {log.importedByName ?? "—"}
+                          </TableCell>
+
+                          {/* Total rows */}
+                          <TableCell className="text-sm font-mono text-center">{log.totalRows}</TableCell>
+
+                          {/* Results summary */}
+                          <TableCell>
+                            <LogSummaryBadges log={log as ImportLog} />
+                          </TableCell>
+
+                          {/* CSV download (hidden on xs) */}
+                          <TableCell className="hidden sm:table-cell text-center">
+                            {log.csvUrl ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-primary hover:text-primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const a = document.createElement("a");
+                                      a.href = log.csvUrl!;
+                                      a.download = log.filename;
+                                      a.target = "_blank";
+                                      a.click();
+                                    }}
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Download CSV</TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+
+                          {/* Actions */}
+                          <TableCell>
+                            <div
+                              className="flex items-center justify-end gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => setSelectedLogId(log.id)}
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>View details</TooltipContent>
+                              </Tooltip>
+
+                              {/* Re-import — primary action, uses solid button */}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="default"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={() => navigate(`/import?reimportLogId=${log.id}`)}
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Re-import from this CSV</TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-destructive hover:text-destructive"
+                                    onClick={() => setDeleteTargetId(log.id)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete log</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
           </CardContent>

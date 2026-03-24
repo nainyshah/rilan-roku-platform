@@ -20,11 +20,11 @@ import {
   Plus, Search, Film, AlertTriangle, CheckCircle, ShieldCheck,
   CalendarClock, CalendarX2, CalendarCheck2, Edit,
   CheckSquare, X, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown,
+  Tag, SlidersHorizontal,
 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Tag } from "lucide-react";
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -368,22 +368,30 @@ export default function Videos() {
     bulkStatusMutation.mutate({ ids: Array.from(selectedIds), status });
   };
 
+  const clearAllFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setSelectedTags(new Set());
+    setPage(1);
+    setSelectedIds(new Set());
+  };
+
   const activeFilterCount = (search ? 1 : 0) + (statusFilter !== "all" ? 1 : 0) + selectedTags.size;
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-4">
+        {/* Page header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Videos</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-0.5">
               {isLoading ? "Loading…" : (
                 <>
                   <span className="font-medium text-foreground">{data?.total ?? 0}</span> video{data?.total !== 1 ? "s" : ""}
                   {activeFilterCount > 0 && (
                     <span className="ml-1 text-primary">
-                      (filtered
-                      {activeFilterCount > 1 ? ` — ${activeFilterCount} filters` : ""})
+                      ({activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active)
                     </span>
                   )}
                   {selectedIds.size > 0 && (
@@ -398,70 +406,96 @@ export default function Videos() {
           </Button>
         </div>
 
-        {/* Filters row */}
-        <div className="flex gap-3 flex-wrap items-center">
-          <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search title, slug, description…"
-              className="pl-9"
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); setSelectedIds(new Set()); }}
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); setSelectedIds(new Set()); }}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="All statuses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
-          {activeFilterCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 gap-1.5 text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setSearch("");
-                setStatusFilter("all");
-                setSelectedTags(new Set());
-                setPage(1);
-                setSelectedIds(new Set());
-              }}
-            >
-              <X className="w-3.5 h-3.5" /> Clear all filters
-            </Button>
-          )}
-        </div>
-
-        {/* Tag filter chips */}
-        {allTags.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground font-medium shrink-0">Tags:</span>
-            {allTags.map((tag) => (
-              <TagChip
-                key={tag}
-                tag={tag}
-                active={selectedTags.has(tag)}
-                onClick={() => toggleTag(tag)}
+        {/* ── Filter bar ── */}
+        <div className="flex flex-col gap-2">
+          {/* Row 1: search + status + sort + clear */}
+          <div className="flex gap-2 flex-wrap items-center">
+            {/* Search */}
+            <div className="relative flex-1 min-w-48">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search title, slug, description…"
+                className="pl-9 h-9"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); setSelectedIds(new Set()); }}
               />
-            ))}
-            {selectedTags.size > 0 && (
+            </div>
+
+            {/* Status filter */}
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); setSelectedIds(new Set()); }}>
+              <SelectTrigger className="w-36 h-9">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Sort by */}
+            <div className="flex items-center gap-1.5 border border-border rounded-md px-2.5 h-9 bg-background shrink-0">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+              <Select value={sortBy} onValueChange={(v) => { setSortBy(v as SortKey); setPage(1); }}>
+                <SelectTrigger className="border-0 shadow-none p-0 h-auto text-xs w-24 focus:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="createdAt">Date Added</SelectItem>
+                  <SelectItem value="title">Title</SelectItem>
+                  <SelectItem value="publishStatus">Status</SelectItem>
+                </SelectContent>
+              </Select>
               <button
-                onClick={() => { setSelectedTags(new Set()); setPage(1); }}
-                className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
+                onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title={sortDir === "asc" ? "Ascending — click to reverse" : "Descending — click to reverse"}
               >
-                Clear tags ({selectedTags.size})
+                {sortDir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
               </button>
+            </div>
+
+            {/* Clear all */}
+            {activeFilterCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 gap-1.5 text-muted-foreground hover:text-foreground shrink-0"
+                onClick={clearAllFilters}
+              >
+                <X className="w-3.5 h-3.5" /> Clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""}
+              </Button>
             )}
           </div>
-        )}
+
+          {/* Row 2: tag chips (only when tags exist) */}
+          {allTags.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-muted-foreground font-medium shrink-0 flex items-center gap-1">
+                <Tag className="w-3 h-3" /> Tags:
+              </span>
+              {allTags.map((tag) => (
+                <TagChip
+                  key={tag}
+                  tag={tag}
+                  active={selectedTags.has(tag)}
+                  onClick={() => toggleTag(tag)}
+                />
+              ))}
+              {selectedTags.size > 0 && (
+                <button
+                  onClick={() => { setSelectedTags(new Set()); setPage(1); }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
+                >
+                  Clear tags ({selectedTags.size})
+                </button>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Table */}
         <Card className="bg-card border-border">
@@ -474,33 +508,36 @@ export default function Videos() {
             ) : pageItems.length === 0 ? (
               <div className="p-12 text-center text-muted-foreground">
                 <Film className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">
-                  {activeFilterCount > 0 ? "No videos match the current filters." : "No videos found."}
+                <p className="text-sm font-medium text-foreground mb-1">
+                  {activeFilterCount > 0 ? "No videos match your filters" : "No videos yet"}
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  {activeFilterCount > 0
+                    ? "Try adjusting or clearing the filters to see more results."
+                    : "Get started by adding your first video or importing a CSV."}
                 </p>
                 {activeFilterCount > 0 ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-3"
-                    onClick={() => {
-                      setSearch(""); setStatusFilter("all"); setSelectedTags(new Set()); setPage(1);
-                    }}
-                  >
-                    Clear filters
+                  <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                    Clear all filters
                   </Button>
                 ) : (
-                  <Button variant="outline" size="sm" className="mt-3" onClick={() => setLocation("/videos/new")}>
-                    Add your first video
-                  </Button>
+                  <div className="flex gap-2 justify-center">
+                    <Button size="sm" onClick={() => setLocation("/videos/new")}>
+                      <Plus className="h-4 w-4 mr-1.5" /> Add Video
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setLocation("/import")}>
+                      Import CSV
+                    </Button>
+                  </div>
                 )}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border">
+                    <tr className="border-b border-border bg-muted/20">
                       {/* Select-all checkbox */}
-                      <th className="px-4 py-3 w-10">
+                      <th className="px-3 py-2.5 w-10">
                         <Checkbox
                           checked={allOnPageSelected}
                           data-state={someOnPageSelected && !allOnPageSelected ? "indeterminate" : undefined}
@@ -509,21 +546,21 @@ export default function Videos() {
                           className="border-border"
                         />
                       </th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 w-12"></th>
-                      <th className="text-left px-4 py-3">
+                      <th className="text-left text-xs text-muted-foreground font-medium px-3 py-2.5 w-12"></th>
+                      <th className="text-left px-3 py-2.5">
                         <SortableHeader label="Title" sortKey="title" currentSort={sortBy} currentDir={sortDir} onSort={handleSort} />
                       </th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden md:table-cell">Type</th>
-                      <th className="text-left px-4 py-3">
+                      <th className="text-left text-xs text-muted-foreground font-medium px-3 py-2.5 hidden md:table-cell">Type</th>
+                      <th className="text-left px-3 py-2.5">
                         <SortableHeader label="Status" sortKey="publishStatus" currentSort={sortBy} currentDir={sortDir} onSort={handleSort} />
                       </th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden lg:table-cell">Validation</th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden xl:table-cell">Schedule</th>
-                      <th className="text-left text-xs text-muted-foreground font-medium px-4 py-3 hidden lg:table-cell">Duration</th>
-                      <th className="text-left px-4 py-3 hidden xl:table-cell">
+                      <th className="text-left text-xs text-muted-foreground font-medium px-3 py-2.5 hidden lg:table-cell">Validation</th>
+                      <th className="text-left text-xs text-muted-foreground font-medium px-3 py-2.5 hidden xl:table-cell">Schedule</th>
+                      <th className="text-left text-xs text-muted-foreground font-medium px-3 py-2.5 hidden lg:table-cell">Duration</th>
+                      <th className="text-left px-3 py-2.5 hidden xl:table-cell">
                         <SortableHeader label="Added" sortKey="createdAt" currentSort={sortBy} currentDir={sortDir} onSort={handleSort} />
                       </th>
-                      <th className="text-right text-xs text-muted-foreground font-medium px-4 py-3">Actions</th>
+                      <th className="text-right text-xs text-muted-foreground font-medium px-3 py-2.5">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -535,7 +572,7 @@ export default function Videos() {
                           className={`border-b border-border/50 hover:bg-muted/30 transition-colors group ${isSelected ? "bg-primary/5" : ""}`}
                         >
                           {/* Row checkbox */}
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2">
                             <Checkbox
                               checked={isSelected}
                               onCheckedChange={() => toggleSelect(video.id)}
@@ -544,38 +581,38 @@ export default function Videos() {
                             />
                           </td>
                           {/* Thumbnail */}
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2">
                             {video.thumbnailUrl ? (
-                              <img src={video.thumbnailUrl} alt="" className="h-8 w-12 object-cover rounded" />
+                              <img src={video.thumbnailUrl} alt="" className="h-7 w-11 object-cover rounded" />
                             ) : (
-                              <div className="h-8 w-12 bg-muted rounded flex items-center justify-center">
+                              <div className="h-7 w-11 bg-muted rounded flex items-center justify-center">
                                 <Film className="h-3 w-3 text-muted-foreground" />
                               </div>
                             )}
                           </td>
                           {/* Title */}
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-foreground truncate max-w-xs">{video.title}</p>
+                          <td className="px-3 py-2">
+                            <p className="font-medium text-foreground truncate max-w-xs leading-tight">{video.title}</p>
                             <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">{video.slug}</p>
                           </td>
                           {/* Type */}
-                          <td className="px-4 py-3 hidden md:table-cell">
+                          <td className="px-3 py-2 hidden md:table-cell">
                             <span className="text-xs text-muted-foreground">{video.contentType}</span>
                           </td>
                           {/* Status */}
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2">
                             <StatusBadge status={video.publishStatus} />
                           </td>
                           {/* Validation */}
-                          <td className="px-4 py-3 hidden lg:table-cell">
+                          <td className="px-3 py-2 hidden lg:table-cell">
                             <ValidationBadge status={video.validationStatus} />
                           </td>
                           {/* Schedule */}
-                          <td className="px-4 py-3 hidden xl:table-cell">
+                          <td className="px-3 py-2 hidden xl:table-cell">
                             <ScheduleIndicator videoId={video.id} scheduleMap={scheduleMap} />
                           </td>
                           {/* Duration */}
-                          <td className="px-4 py-3 hidden lg:table-cell">
+                          <td className="px-3 py-2 hidden lg:table-cell">
                             <span className="text-xs text-muted-foreground">
                               {video.durationSeconds
                                 ? `${Math.floor(video.durationSeconds / 60)}m ${video.durationSeconds % 60}s`
@@ -583,32 +620,40 @@ export default function Videos() {
                             </span>
                           </td>
                           {/* Added date */}
-                          <td className="px-4 py-3 hidden xl:table-cell">
+                          <td className="px-3 py-2 hidden xl:table-cell">
                             <span className="text-xs text-muted-foreground">
                               {video.createdAt ? new Date(video.createdAt).toLocaleDateString() : "—"}
                             </span>
                           </td>
                           {/* Actions */}
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2">
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                                title="Validate"
-                                onClick={() => validateMutation.mutate({ id: video.id })}
-                              >
-                                <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                                title="Edit"
-                                onClick={() => setLocation(`/videos/${video.id}`)}
-                              >
-                                <Edit className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => validateMutation.mutate({ id: video.id })}
+                                  >
+                                    <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Validate</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => setLocation(`/videos/${video.id}`)}
+                                  >
+                                    <Edit className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit</TooltipContent>
+                              </Tooltip>
                               <Select
                                 value={video.publishStatus}
                                 onValueChange={(v) =>
@@ -683,7 +728,7 @@ export default function Videos() {
         )}
       </div>
 
-      {/* Floating bulk action bar */}
+      {/* Floating bulk action bar — only when items are selected */}
       {selectedIds.size > 0 && (
         <BulkActionBar
           selectedCount={selectedIds.size}
