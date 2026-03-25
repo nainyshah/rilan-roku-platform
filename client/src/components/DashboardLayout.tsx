@@ -38,6 +38,7 @@ import {
   Rss,
   Send,
   Settings,
+  Sparkles,
   Tv,
   Upload,
   Webhook,
@@ -62,6 +63,10 @@ const publishMenuItems = [
   { icon: Rss, label: "Feed Preview", path: "/feed-preview" },
   { icon: Send, label: "Publishing", path: "/publishing" },
   { icon: Webhook, label: "Webhooks", path: "/webhooks" },
+];
+
+const aiMenuItems = [
+  { icon: Sparkles, label: "AI Features", path: "/ai" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -134,7 +139,7 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
-  const allItems = [...contentMenuItems, ...publishMenuItems];
+  const allItems = [...contentMenuItems, ...publishMenuItems, ...aiMenuItems];
   const activeMenuItem = allItems.find((item) => {
     if (item.path === "/") return location === "/";
     return location.startsWith(item.path);
@@ -234,6 +239,34 @@ function DashboardLayoutContent({
               )}
               <SidebarMenu className="px-2">
                 {publishMenuItems.map((item) => {
+                  const isActive = location.startsWith(item.path);
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => setLocation(item.path)}
+                        tooltip={item.label}
+                        className="h-9 transition-all font-normal"
+                      >
+                        <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                        <span className={isActive ? "text-foreground font-medium" : "text-foreground/80"}>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarSeparator className="my-1" />
+
+            <SidebarGroup>
+              {!isCollapsed && (
+                <SidebarGroupLabel className="text-xs text-muted-foreground px-4 py-1">
+                  AI
+                </SidebarGroupLabel>
+              )}
+              <SidebarMenu className="px-2">
+                {aiMenuItems.map((item) => {
                   const isActive = location.startsWith(item.path);
                   return (
                     <SidebarMenuItem key={item.path}>

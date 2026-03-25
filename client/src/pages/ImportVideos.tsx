@@ -36,7 +36,6 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
-  ArrowLeft,
   History as HistoryIcon,
   ImageOff,
   Image,
@@ -553,12 +552,6 @@ export default function ImportVideos() {
 
       {/* Header */}
       <div className="flex items-center gap-4 flex-wrap">
-        <Link href="/videos">
-          <Button variant="ghost" size="sm" className="gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Videos
-          </Button>
-        </Link>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Bulk Video Import</h1>
           <p className="text-sm text-muted-foreground mt-0.5">

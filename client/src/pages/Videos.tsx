@@ -20,7 +20,7 @@ import {
   Plus, Search, Film, AlertTriangle, CheckCircle, ShieldCheck,
   CalendarClock, CalendarX2, CalendarCheck2, Edit,
   CheckSquare, X, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown,
-  Tag, SlidersHorizontal,
+  Tag, SlidersHorizontal, Sparkles,
 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
@@ -308,6 +308,11 @@ export default function Videos() {
   const validateMutation = trpc.videos.validate.useMutation({
     onSuccess: (r) => { toast.success(`Validation: ${r.status}`); refetch(); },
     onError: (e) => toast.error(e.message),
+  });
+
+  const enrichVideoMutation = trpc.ai.enrichVideo.useMutation({
+    onSuccess: (r) => { toast.success(r.applied ? "Video enriched & saved" : "Enrichment preview ready"); },
+    onError: (e) => toast.error(`AI enrich failed: ${e.message}`),
   });
 
   const bulkStatusMutation = trpc.videos.bulkUpdateStatus.useMutation({
@@ -626,6 +631,20 @@ export default function Videos() {
                           {/* Actions */}
                           <td className="px-3 py-2">
                             <div className="flex items-center justify-end gap-1">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    disabled={enrichVideoMutation.isPending}
+                                    onClick={() => enrichVideoMutation.mutate({ videoId: video.id, apply: true })}
+                                  >
+                                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>AI Enrich</TooltipContent>
+                              </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button

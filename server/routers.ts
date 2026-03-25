@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { importRouter } from "./routers/import";
 import { webhooksRouter } from "./routers/webhooks";
+import { aiRouter } from "./routers/ai";
 import { dispatchWebhooks } from "./webhookDispatcher";
 import { invalidateFeedCacheRedis, purgeAllFeedCacheRedis, getFeedCacheStatsRedis } from "./redisFeedCache";
 import { z } from "zod";
@@ -753,8 +754,10 @@ export const appRouter = router({
     }),
   }),
 
-  // ─── Webhooks ──────────────────────────────────────────────────────────
+    // ─── Webhooks ──────────────────────────────────────────────
   webhooks: webhooksRouter,
+  // ─── AI ────────────────────────────────────────────────────────
+  ai: aiRouter,
 });
 
 export type AppRouter = typeof appRouter;

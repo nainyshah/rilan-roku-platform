@@ -213,3 +213,41 @@ export const webhookDeliveries = mysqlTable("webhook_deliveries", {
 
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 export type InsertWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+
+// ─── AI Jobs ──────────────────────────────────────────────────────────────────
+export const aiJobs = mysqlTable("ai_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  /** The type of AI operation */
+  jobType: mysqlEnum("jobType", [
+    "enrich_video",
+    "bulk_enrich",
+    "generate_tags",
+    "validate_content",
+    "generate_description",
+    "generate_title",
+  ]).notNull(),
+  /** Status of the job */
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
+  /** Optional reference to a single video */
+  videoId: int("videoId"),
+  /** Optional reference to a channel (for bulk operations) */
+  channelId: int("channelId"),
+  /** Input payload sent to the LLM */
+  inputPayload: json("inputPayload"),
+  /** Raw LLM output */
+  outputPayload: json("outputPayload"),
+  /** Human-readable result summary */
+  resultSummary: text("resultSummary"),
+  /** Error message if failed */
+  errorMessage: text("errorMessage"),
+  /** Number of videos processed (for bulk jobs) */
+  processedCount: int("processedCount").default(0),
+  /** Number of videos that failed (for bulk jobs) */
+  failedCount: int("failedCount").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type AiJob = typeof aiJobs.$inferSelect;
+export type InsertAiJob = typeof aiJobs.$inferInsert;

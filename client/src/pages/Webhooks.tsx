@@ -450,9 +450,9 @@ function WebhookCard({
   const testFire = trpc.webhooks.testFire.useMutation({
     onSuccess: (result) => {
       if (result.success) {
-        toast.success(`Test ping delivered (HTTP ${result.statusCode})`);
+        toast.success(`Test payload delivered (HTTP ${result.statusCode})`);
       } else {
-        toast.warning(`Test ping failed — HTTP ${result.statusCode ?? "N/A"}: ${result.error ?? result.responseBody ?? "unknown error"}`);
+        toast.warning(`Test delivery failed — HTTP ${result.statusCode ?? "N/A"}: ${result.error ?? result.responseBody ?? "unknown error"}`);
       }
       if (showDeliveries) refetchDeliveries();
       onRefresh();
@@ -545,13 +545,13 @@ function WebhookCard({
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             size="sm"
-            variant="outline"
-            className="gap-1.5 h-7 text-xs"
+            variant="default"
+            className="gap-1.5 h-7 text-xs bg-primary hover:bg-primary/90"
             onClick={() => testFire.mutate({ id: cfg.id })}
             disabled={testFire.isPending}
           >
             {testFire.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-            Test Ping
+            Send Test
           </Button>
           <Button
             size="sm"

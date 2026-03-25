@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `ai_jobs` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`jobType` enum('enrich_video','bulk_enrich','generate_tags','validate_content','generate_description','generate_title') NOT NULL,\n\t`status` enum('pending','running','completed','failed') NOT NULL DEFAULT 'pending',\n\t`videoId` int,\n\t`channelId` int,\n\t`inputPayload` json,\n\t`outputPayload` json,\n\t`resultSummary` text,\n\t`errorMessage` text,\n\t`processedCount` int DEFAULT 0,\n\t`failedCount` int DEFAULT 0,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\t`completedAt` timestamp,\n\tCONSTRAINT `ai_jobs_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3otSeZLaG2g6mhr.root --database NAe7NGE4cjeEx46c5Rofwa --execute CREATE TABLE `ai_jobs` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`jobType` enum('enrich_video','bulk_enrich','generate_tags','validate_content','generate_description','generate_title') NOT NULL,\n\t`status` enum('pending','running','completed','failed') NOT NULL DEFAULT 'pending',\n\t`videoId` int,\n\t`channelId` int,\n\t`inputPayload` json,\n\t`outputPayload` json,\n\t`resultSummary` text,\n\t`errorMessage` text,\n\t`processedCount` int DEFAULT 0,\n\t`failedCount` int DEFAULT 0,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\t`completedAt` timestamp,\n\tCONSTRAINT `ai_jobs_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1932
+}

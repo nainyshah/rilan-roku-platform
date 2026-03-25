@@ -17,6 +17,7 @@ import Publishing from "./pages/Publishing";
 import ImportVideos from "./pages/ImportVideos";
 import ImportHistory from "./pages/ImportHistory";
 import Webhooks from "./pages/Webhooks";
+import AIPage from "./pages/AI";
 
 function Router() {
   return (
@@ -34,6 +35,7 @@ function Router() {
         <Route path="/import" component={ImportVideos} />
         <Route path="/import/history" component={ImportHistory} />
         <Route path="/webhooks" component={Webhooks} />
+        <Route path="/ai" component={AIPage} />
         <Route component={NotFound} />
       </Switch>
     </DashboardLayout>

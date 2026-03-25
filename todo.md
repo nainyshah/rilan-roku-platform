@@ -240,3 +240,11 @@
 - [x] ImportVideos: remove own DashboardLayout wrapper, normalize spacing to space-y-6
 - [x] Publishing: remove own DashboardLayout wrapper, normalize spacing to space-y-6
 - [x] Webhooks: remove own DashboardLayout wrapper, normalize spacing to space-y-6
+
+## New Features (2026-03-25)
+- [x] ImportVideos: remove Back to Videos button
+- [x] Webhooks: add Send Test button per webhook with backend tRPC procedure
+- [x] AI Features: schema table for ai_jobs, backend procedures (enrich video, bulk enrich, generate tags, validate content)
+- [x] AI Features: AI page with bulk enrichment, job history, and per-video AI panel
+- [x] AI Features: wire AI enrich button into Videos table row actions
+- [x] AI Features: add AI nav item to DashboardLayout sidebar
