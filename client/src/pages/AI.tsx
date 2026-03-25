@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Info,
   Zap,
+  RotateCcw,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -81,7 +82,7 @@ function JobTypeLabel({ type }: { type: string }) {
   );
 }
 
-function JobRow({ job }: { job: AiJob }) {
+function JobRow({ job, onRetry, isRetrying }: { job: AiJob; onRetry: (id: number) => void; isRetrying: boolean }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="border border-border rounded-lg overflow-hidden">
@@ -121,6 +122,24 @@ function JobRow({ job }: { job: AiJob }) {
               <span>Completed: {new Date(job.completedAt).toLocaleString()}</span>
             )}
           </div>
+          {job.status === "failed" && (
+            <div className="pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-7 text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+                onClick={(e) => { e.stopPropagation(); onRetry(job.id); }}
+                disabled={isRetrying}
+              >
+                {isRetrying ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3 h-3" />
+                )}
+                {isRetrying ? "Retrying…" : "Retry Job"}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -464,6 +483,22 @@ function SingleVideoPanel() {
 
 function JobHistory() {
   const { data: jobs, isLoading, refetch } = trpc.ai.listJobs.useQuery({ limit: 30 });
+  const [retryingId, setRetryingId] = useState<number | null>(null);
+  const retryJob = trpc.ai.retryJob.useMutation({
+    onSuccess: () => {
+      toast.success("Job retried successfully");
+      setRetryingId(null);
+      refetch();
+    },
+    onError: (e) => {
+      toast.error(`Retry failed: ${e.message}`);
+      setRetryingId(null);
+    },
+  });
+  const handleRetry = (id: number) => {
+    setRetryingId(id);
+    retryJob.mutate({ id });
+  };
 
   return (
     <Card>
@@ -499,7 +534,12 @@ function JobHistory() {
         ) : (
           <div className="space-y-2">
             {jobs.map((job) => (
-              <JobRow key={job.id} job={job as AiJob} />
+              <JobRow
+                key={job.id}
+                job={job as AiJob}
+                onRetry={handleRetry}
+                isRetrying={retryingId === job.id && retryJob.isPending}
+              />
             ))}
           </div>
         )}

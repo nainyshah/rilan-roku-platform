@@ -248,3 +248,8 @@
 - [x] AI Features: AI page with bulk enrichment, job history, and per-video AI panel
 - [x] AI Features: wire AI enrich button into Videos table row actions
 - [x] AI Features: add AI nav item to DashboardLayout sidebar
+
+## AI Enhancements (2026-03-25 batch 2)
+- [x] AI diff dialog: show original vs AI-suggested title/description/tags before saving
+- [x] Videos bulk action bar: add Bulk AI Enrich option
+- [x] AI Features job history: add Retry button for failed jobs

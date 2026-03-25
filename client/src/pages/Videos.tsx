@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import AIDiffDialog, { type AISuggestion, type OriginalValues, type ApprovedFields } from "@/components/AIDiffDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -143,12 +144,16 @@ function BulkActionBar({
   selectedCount,
   onDeselect,
   onBulkStatus,
+  onBulkAIEnrich,
   isLoading,
+  isAILoading,
 }: {
   selectedCount: number;
   onDeselect: () => void;
   onBulkStatus: (status: PublishStatus) => void;
+  onBulkAIEnrich: () => void;
   isLoading: boolean;
+  isAILoading: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<PublishStatus | null>(null);
@@ -168,6 +173,17 @@ function BulkActionBar({
           <CheckSquare className="w-4 h-4 text-primary" />
           <span>{selectedCount} selected</span>
         </div>
+        <div className="h-5 w-px bg-border" />
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 h-8 border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
+          onClick={onBulkAIEnrich}
+          disabled={isAILoading || isLoading}
+        >
+          <Sparkles className={`w-3.5 h-3.5 ${isAILoading ? "animate-pulse" : ""}`} />
+          {isAILoading ? "Enriching…" : "Bulk AI Enrich"}
+        </Button>
         <div className="h-5 w-px bg-border" />
         <div className="relative">
           <Button
@@ -310,10 +326,66 @@ export default function Videos() {
     onError: (e) => toast.error(e.message),
   });
 
+  // ─── AI diff dialog state ────────────────────────────────────────────────────
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffVideo, setDiffVideo] = useState<{ id: number; title: string; original: OriginalValues } | null>(null);
+  const [diffSuggestion, setDiffSuggestion] = useState<AISuggestion | null>(null);
+  const [diffError, setDiffError] = useState<string | null>(null);
+
   const enrichVideoMutation = trpc.ai.enrichVideo.useMutation({
-    onSuccess: (r) => { toast.success(r.applied ? "Video enriched & saved" : "Enrichment preview ready"); },
-    onError: (e) => toast.error(`AI enrich failed: ${e.message}`),
+    onSuccess: (r) => {
+      setDiffSuggestion(r.result as AISuggestion);
+      setDiffError(null);
+    },
+    onError: (e) => {
+      setDiffError(e.message);
+    },
   });
+
+  const applyEnrichmentMutation = trpc.ai.applyEnrichment.useMutation({
+    onSuccess: () => {
+      toast.success("AI enrichment applied");
+      setDiffOpen(false);
+      setDiffVideo(null);
+      setDiffSuggestion(null);
+      refetch();
+    },
+    onError: (e) => toast.error(`Failed to apply: ${e.message}`),
+  });
+
+  const bulkEnrichMutation = trpc.ai.bulkEnrich.useMutation({
+    onSuccess: (r) => {
+      toast.success(`Bulk AI enrichment complete: ${r.processed} processed, ${r.failed} failed`);
+      setSelectedIds(new Set());
+      refetch();
+    },
+    onError: (e) => toast.error(`Bulk AI enrich failed: ${e.message}`),
+  });
+
+  const openAIDiff = (video: { id: number; title: string; description: string | null; tags: unknown; contentRating: string | null }) => {
+    const parsedTags: string[] = (() => {
+      try {
+        if (!video.tags) return [];
+        const raw = typeof video.tags === "string" ? video.tags : JSON.stringify(video.tags);
+        return JSON.parse(raw) as string[];
+      } catch { return []; }
+    })();
+    const original: OriginalValues = {
+      title: video.title,
+      description: video.description,
+      tags: parsedTags,
+      contentRating: video.contentRating,
+    };
+    setDiffVideo({ id: video.id, title: video.title, original });
+    setDiffSuggestion(null);
+    setDiffError(null);
+    setDiffOpen(true);
+    enrichVideoMutation.mutate({ videoId: video.id, apply: false });
+  };
+
+  const handleBulkAIEnrich = () => {
+    bulkEnrichMutation.mutate({ videoIds: Array.from(selectedIds), apply: true });
+  };
 
   const bulkStatusMutation = trpc.videos.bulkUpdateStatus.useMutation({
     onSuccess: (r) => {
@@ -638,7 +710,7 @@ export default function Videos() {
                                     variant="ghost"
                                     className="h-7 w-7 p-0"
                                     disabled={enrichVideoMutation.isPending}
-                                    onClick={() => enrichVideoMutation.mutate({ videoId: video.id, apply: true })}
+                                    onClick={() => openAIDiff(video)}
                                   >
                                     <Sparkles className="h-3.5 w-3.5 text-purple-400" />
                                   </Button>
@@ -749,7 +821,34 @@ export default function Videos() {
           selectedCount={selectedIds.size}
           onDeselect={() => setSelectedIds(new Set())}
           onBulkStatus={handleBulkStatus}
+          onBulkAIEnrich={handleBulkAIEnrich}
           isLoading={bulkStatusMutation.isPending}
+          isAILoading={bulkEnrichMutation.isPending}
+        />
+      )}
+
+      {/* AI Diff Dialog */}
+      {diffVideo && (
+        <AIDiffDialog
+          open={diffOpen}
+          onOpenChange={(v) => { if (!applyEnrichmentMutation.isPending) setDiffOpen(v); }}
+          videoTitle={diffVideo.title}
+          original={diffVideo.original}
+          suggestion={diffSuggestion}
+          isLoading={enrichVideoMutation.isPending}
+          error={diffError}
+          isApplying={applyEnrichmentMutation.isPending}
+          onApprove={(approved: ApprovedFields) => {
+            applyEnrichmentMutation.mutate({
+              videoId: diffVideo.id,
+              ...approved,
+            });
+          }}
+          onDiscard={() => {
+            setDiffOpen(false);
+            setDiffVideo(null);
+            setDiffSuggestion(null);
+          }}
         />
       )}
     </div>

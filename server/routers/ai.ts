@@ -461,30 +461,35 @@ Respond with JSON: { "description": "...", "reasoning": "..." }`,
     }),
 
   /** Bulk enrich videos in a channel */
-  bulkEnrich: adminProcedure
+    bulkEnrich: adminProcedure
     .input(
       z.object({
-        channelId: z.number().int().positive(),
+        channelId: z.number().int().positive().optional(),
+        videoIds: z.array(z.number().int().positive()).optional(),
         onlyMissing: z.boolean().default(true),
         apply: z.boolean().default(false),
         limit: z.number().int().min(1).max(50).default(20),
+      }).refine((d) => d.channelId !== undefined || (d.videoIds && d.videoIds.length > 0), {
+        message: "Either channelId or videoIds must be provided",
       })
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-
-      const channelVideoRows = await db
-        .select({ videoId: channelVideos.videoId })
-        .from(channelVideos)
-        .where(eq(channelVideos.channelId, input.channelId))
-        .limit(input.limit);
-
-      if (channelVideoRows.length === 0) {
-        return { jobId: null, processed: 0, failed: 0, results: [], message: "No videos in this channel." };
-      }
-
-      const videoIds = channelVideoRows.map((r) => r.videoId);
+      let videoIds: number[];
+      if (input.videoIds && input.videoIds.length > 0) {
+        videoIds = input.videoIds;
+      } else {
+        const channelVideoRows = await db
+          .select({ videoId: channelVideos.videoId })
+          .from(channelVideos)
+          .where(eq(channelVideos.channelId, input.channelId!))
+          .limit(input.limit);
+        if (channelVideoRows.length === 0) {
+          return { jobId: null, processed: 0, failed: 0, results: [], message: "No videos in this channel." };
+        }
+        videoIds = channelVideoRows.map((r) => r.videoId);
+      };
       const videoRows = await db
         .select()
         .from(videos)
@@ -595,5 +600,85 @@ Respond with JSON: { "description": "...", "reasoning": "..." }`,
       const rows = await db.select().from(aiJobs).where(eq(aiJobs.id, input.id)).limit(1);
       if (!rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
       return rows[0];
+    }),
+
+  /** Apply approved enrichment fields to a video (called after diff dialog approval) */
+  applyEnrichment: adminProcedure
+    .input(
+      z.object({
+        videoId: z.number().int().positive(),
+        title: z.string().min(1),
+        description: z.string(),
+        tags: z.array(z.string()),
+        contentRating: z.string().optional(),
+        jobId: z.number().int().positive().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const safeRating: ContentRating = VALID_RATINGS.includes(input.contentRating as ContentRating)
+        ? (input.contentRating as ContentRating)
+        : "all";
+      await db.update(videos).set({
+        title: input.title,
+        description: input.description,
+        tags: input.tags,
+        contentRating: safeRating,
+      }).where(eq(videos.id, input.videoId));
+      if (input.jobId) {
+        await db.update(aiJobs).set({ status: "completed" }).where(eq(aiJobs.id, input.jobId));
+      }
+      return { applied: true };
+    }),
+
+  /** Retry a failed AI job */
+  retryJob: adminProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const rows = await db.select().from(aiJobs).where(eq(aiJobs.id, input.id)).limit(1);
+      const job = rows[0];
+      if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+      if (job.status !== "failed") throw new TRPCError({ code: "BAD_REQUEST", message: "Only failed jobs can be retried" });
+      await db.update(aiJobs).set({
+        status: "running",
+        errorMessage: null,
+        completedAt: null,
+      }).where(eq(aiJobs.id, input.id));
+      try {
+        if (job.jobType === "enrich_video" && job.videoId) {
+          const videoRows = await db.select().from(videos).where(eq(videos.id, job.videoId)).limit(1);
+          if (!videoRows[0]) throw new Error("Video not found");
+          const enriched = await enrichSingleVideo(videoRows[0]);
+          const safeRating: ContentRating = VALID_RATINGS.includes(enriched.contentRating as ContentRating)
+            ? (enriched.contentRating as ContentRating)
+            : (videoRows[0].contentRating as ContentRating) ?? "all";
+          await db.update(videos).set({
+            title: enriched.title,
+            description: enriched.description,
+            tags: enriched.tags,
+            contentRating: safeRating,
+          }).where(eq(videos.id, job.videoId));
+          await db.update(aiJobs).set({
+            status: "completed",
+            outputPayload: enriched,
+            resultSummary: `Retried: enriched "${videoRows[0].title}" to "${enriched.title}".`,
+            processedCount: 1,
+            failedCount: 0,
+            completedAt: new Date(),
+          }).where(eq(aiJobs.id, input.id));
+          return { success: true, jobType: job.jobType };
+        }
+        throw new Error(`Retry not supported for job type: ${job.jobType}`);
+      } catch (err) {
+        await db.update(aiJobs).set({
+          status: "failed",
+          errorMessage: err instanceof Error ? err.message : String(err),
+          completedAt: new Date(),
+        }).where(eq(aiJobs.id, input.id));
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err instanceof Error ? err.message : String(err) });
+      }
     }),
 });
