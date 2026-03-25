@@ -231,3 +231,6 @@
 - [x] ImportVideos: fix content overflowing outside DashboardLayout main area
 - [x] Publishing: fix content overflowing outside DashboardLayout main area
 - [x] Webhooks: fix content overflowing outside DashboardLayout main area
+
+## Videos Layout Match (2026-03-25)
+- [x] Videos page: remove own DashboardLayout wrapper (was double-nested), change space-y-4 to space-y-6, fix subtitle margin to match Channels page

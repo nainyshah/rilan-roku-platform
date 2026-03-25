@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
-import DashboardLayout from "@/components/DashboardLayout";
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -379,13 +378,12 @@ export default function Videos() {
   const activeFilterCount = (search ? 1 : 0) + (statusFilter !== "all" ? 1 : 0) + selectedTags.size;
 
   return (
-    <DashboardLayout>
-      <div className="space-y-4">
+    <div className="space-y-6">
         {/* Page header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Videos</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               {isLoading ? "Loading…" : (
                 <>
                   <span className="font-medium text-foreground">{data?.total ?? 0}</span> video{data?.total !== 1 ? "s" : ""}
@@ -726,9 +724,7 @@ export default function Videos() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Floating bulk action bar — only when items are selected */}
+      {/* Floating bulk action bar - only when items are selected */}
       {selectedIds.size > 0 && (
         <BulkActionBar
           selectedCount={selectedIds.size}
@@ -737,6 +733,6 @@ export default function Videos() {
           isLoading={bulkStatusMutation.isPending}
         />
       )}
-    </DashboardLayout>
+    </div>
   );
 }
