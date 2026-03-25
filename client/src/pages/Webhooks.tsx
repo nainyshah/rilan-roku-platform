@@ -3,7 +3,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -729,148 +728,146 @@ export default function Webhooks() {
   const selectedChannel = channels?.find((c) => c.id === selectedChannelId);
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Webhook className="w-6 h-6 text-primary" />
-              Webhooks
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Notify external services when Roku feed content changes. Payloads are HMAC-SHA256 signed.
-            </p>
-          </div>
-          {selectedChannelId && (
-            <Button onClick={openCreate} className="gap-2">
-              <Plus className="w-4 h-4" />
-              Add Webhook
-            </Button>
-          )}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Webhook className="w-6 h-6 text-primary" />
+            Webhooks
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Notify external services when Roku feed content changes. Payloads are HMAC-SHA256 signed.
+          </p>
         </div>
-
-        {/* Compact inline channel selector — no card wrapper */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <Label className="text-sm text-muted-foreground shrink-0">Channel</Label>
-          <Select
-            value={selectedChannelId?.toString() ?? ""}
-            onValueChange={(v) => setSelectedChannelId(Number(v))}
-          >
-            <SelectTrigger className="w-56 h-8 text-sm">
-              <SelectValue placeholder="Select a channel…" />
-            </SelectTrigger>
-            <SelectContent>
-              {channels?.map((ch) => (
-                <SelectItem key={ch.id} value={ch.id.toString()}>
-                  {ch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {selectedChannel && (
-            <Badge variant="outline" className="text-xs font-mono">{selectedChannel.slug}</Badge>
-          )}
-        </div>
-
-        {/* No channel selected — prompt */}
-        {!selectedChannelId && (
-          <Card className="bg-card border-border">
-            <CardContent className="py-12 text-center">
-              <Webhook className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-muted-foreground text-sm">Select a channel above to manage its webhooks.</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Tabs — only shown when a channel is selected */}
         {selectedChannelId && (
-          <Tabs defaultValue="configs">
-            <TabsList className="w-fit">
-              <TabsTrigger value="configs">Configurations</TabsTrigger>
-              <TabsTrigger value="dashboard" className="gap-1.5">
-                <Activity className="w-3.5 h-3.5" />
-                Delivery Dashboard
-              </TabsTrigger>
-            </TabsList>
-
-            {/* Configurations tab */}
-            <TabsContent value="configs" className="mt-4">
-              {!webhooks || webhooks.length === 0 ? (
-                <Card className="bg-card border-border">
-                  <CardContent className="py-12 text-center">
-                    <Webhook className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground text-sm">No webhooks configured for this channel.</p>
-                    <Button onClick={openCreate} className="mt-4 gap-2" size="sm">
-                      <Plus className="w-4 h-4" /> Add your first webhook
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {webhooks.map((cfg) => (
-                    <WebhookCard
-                      key={cfg.id}
-                      cfg={cfg}
-                      channelId={selectedChannelId}
-                      onEdit={openEdit}
-                      onDelete={setDeletingId}
-                      onRefresh={refetchWebhooks}
-                    />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Delivery Dashboard tab */}
-            <TabsContent value="dashboard" className="mt-4">
-              <Card className="bg-card border-border">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-primary" />
-                    Delivery Monitoring Dashboard
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Real-time delivery stats and retry controls for all webhooks on this channel. Auto-refreshes every 30s.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <DeliveryDashboard channelId={selectedChannelId} />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="w-4 h-4" />
+            Add Webhook
+          </Button>
         )}
+      </div>
 
-        {/* Signing info card — with copy button on code block */}
+      {/* Compact inline channel selector — no card wrapper */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Label className="text-sm text-muted-foreground shrink-0">Channel</Label>
+        <Select
+          value={selectedChannelId?.toString() ?? ""}
+          onValueChange={(v) => setSelectedChannelId(Number(v))}
+        >
+          <SelectTrigger className="w-56 h-8 text-sm">
+            <SelectValue placeholder="Select a channel…" />
+          </SelectTrigger>
+          <SelectContent>
+            {channels?.map((ch) => (
+              <SelectItem key={ch.id} value={ch.id.toString()}>
+                {ch.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedChannel && (
+          <Badge variant="outline" className="text-xs font-mono">{selectedChannel.slug}</Badge>
+        )}
+      </div>
+
+      {/* No channel selected — prompt */}
+      {!selectedChannelId && (
         <Card className="bg-card border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Webhook Signature Verification</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Every delivery includes an <code className="bg-muted px-1 rounded">X-Roku-Signature</code> header
-              with an HMAC-SHA256 digest of the request body, signed with your webhook secret.
-            </p>
-            <div className="relative group">
-              <pre className="bg-black/30 rounded p-3 text-xs font-mono text-muted-foreground overflow-x-auto">
-                {SIGNATURE_CODE}
-              </pre>
-              <button
-                onClick={copyCode}
-                className="absolute top-2 right-2 p-1.5 rounded bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
-                aria-label="Copy code"
-              >
-                {codeCopied ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5" />
-                )}
-              </button>
-            </div>
+          <CardContent className="py-12 text-center">
+            <Webhook className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm">Select a channel above to manage its webhooks.</p>
           </CardContent>
         </Card>
-      </div>
+      )}
+
+      {/* Tabs — only shown when a channel is selected */}
+      {selectedChannelId && (
+        <Tabs defaultValue="configs">
+          <TabsList className="w-fit">
+            <TabsTrigger value="configs">Configurations</TabsTrigger>
+            <TabsTrigger value="dashboard" className="gap-1.5">
+              <Activity className="w-3.5 h-3.5" />
+              Delivery Dashboard
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Configurations tab */}
+          <TabsContent value="configs" className="mt-4">
+            {!webhooks || webhooks.length === 0 ? (
+              <Card className="bg-card border-border">
+                <CardContent className="py-12 text-center">
+                  <Webhook className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground text-sm">No webhooks configured for this channel.</p>
+                  <Button onClick={openCreate} className="mt-4 gap-2" size="sm">
+                    <Plus className="w-4 h-4" /> Add your first webhook
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {webhooks.map((cfg) => (
+                  <WebhookCard
+                    key={cfg.id}
+                    cfg={cfg}
+                    channelId={selectedChannelId}
+                    onEdit={openEdit}
+                    onDelete={setDeletingId}
+                    onRefresh={refetchWebhooks}
+                  />
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Delivery Dashboard tab */}
+          <TabsContent value="dashboard" className="mt-4">
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  Delivery Monitoring Dashboard
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Real-time delivery stats and retry controls for all webhooks on this channel. Auto-refreshes every 30s.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DeliveryDashboard channelId={selectedChannelId} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
+
+      {/* Signing info card — with copy button on code block */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Webhook Signature Verification</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Every delivery includes an <code className="bg-muted px-1 rounded">X-Roku-Signature</code> header
+            with an HMAC-SHA256 digest of the request body, signed with your webhook secret.
+          </p>
+          <div className="relative group">
+            <pre className="bg-black/30 rounded p-3 text-xs font-mono text-muted-foreground overflow-x-auto">
+              {SIGNATURE_CODE}
+            </pre>
+            <button
+              onClick={copyCode}
+              className="absolute top-2 right-2 p-1.5 rounded bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
+              aria-label="Copy code"
+            >
+              {codeCopied ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Create / Edit Dialog */}
       <Dialog
@@ -981,6 +978,6 @@ export default function Webhooks() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </DashboardLayout>
+    </div>
   );
 }
