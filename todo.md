@@ -253,3 +253,8 @@
 - [x] AI diff dialog: show original vs AI-suggested title/description/tags before saving
 - [x] Videos bulk action bar: add Bulk AI Enrich option
 - [x] AI Features job history: add Retry button for failed jobs
+
+## AI Enhancements (2026-03-25 batch 3)
+- [x] AI bulk enrich diff review: backend returns all suggestions without applying, frontend shows paginated diff dialog before saving
+- [x] AI stream URL inference: detect content type (HLS/DASH/MP4/short-form) and suggest content rating from URL patterns
+- [x] AI job history auto-polling: poll every 5s when any job is pending/running, stop when all complete

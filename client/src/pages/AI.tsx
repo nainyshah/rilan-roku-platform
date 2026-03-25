@@ -482,7 +482,16 @@ function SingleVideoPanel() {
 // ─── Job History ──────────────────────────────────────────────────────────────
 
 function JobHistory() {
-  const { data: jobs, isLoading, refetch } = trpc.ai.listJobs.useQuery({ limit: 30 });
+  const { data: jobs, isLoading, refetch } = trpc.ai.listJobs.useQuery(
+    { limit: 30 },
+    {
+      refetchInterval: (query) => {
+        const jobList = (query.state.data ?? []) as { status: string }[];
+        return jobList.some((j) => j.status === "pending" || j.status === "running") ? 5000 : false;
+      },
+    }
+  );
+  const isPolling = (jobs ?? []).some((j) => (j as { status: string }).status === "pending" || (j as { status: string }).status === "running");
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const retryJob = trpc.ai.retryJob.useMutation({
     onSuccess: () => {
@@ -515,9 +524,20 @@ function JobHistory() {
               </CardDescription>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Refresh"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isPolling && (
+              <span className="flex items-center gap-1.5 text-xs text-blue-400">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                </span>
+                Auto-refreshing
+              </span>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Refresh"}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

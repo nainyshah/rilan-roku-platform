@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import AIDiffDialog, { type AISuggestion, type OriginalValues, type ApprovedFields } from "@/components/AIDiffDialog";
+import { BulkDiffReviewDialog, type BulkSuggestion } from "@/components/BulkDiffReviewDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -331,6 +332,10 @@ export default function Videos() {
   const [diffVideo, setDiffVideo] = useState<{ id: number; title: string; original: OriginalValues } | null>(null);
   const [diffSuggestion, setDiffSuggestion] = useState<AISuggestion | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
+  // ─── Bulk diff review state ───────────────────────────────────────────────────
+  const [bulkDiffOpen, setBulkDiffOpen] = useState(false);
+  const [bulkDiffSuggestions, setBulkDiffSuggestions] = useState<BulkSuggestion[]>([]);
+  const [bulkDiffOriginals, setBulkDiffOriginals] = useState<Record<number, { title: string; description: string | null; tags: string[]; contentRating: string | null; contentType: string | null }>>({});
 
   const enrichVideoMutation = trpc.ai.enrichVideo.useMutation({
     onSuccess: (r) => {
@@ -355,9 +360,33 @@ export default function Videos() {
 
   const bulkEnrichMutation = trpc.ai.bulkEnrich.useMutation({
     onSuccess: (r) => {
-      toast.success(`Bulk AI enrichment complete: ${r.processed} processed, ${r.failed} failed`);
-      setSelectedIds(new Set());
-      refetch();
+      const successResults = r.results?.filter((s) => s.status === "ok") ?? [];
+      if (successResults.length > 0) {
+        // Build originals map from current page data
+        const originalsMap: Record<number, { title: string; description: string | null; tags: string[]; contentRating: string | null; contentType: string | null }> = {};
+        for (const item of data?.items ?? []) {
+          const parsedTags: string[] = (() => {
+            try {
+              if (!item.tags) return [];
+              const raw = typeof item.tags === "string" ? item.tags : JSON.stringify(item.tags);
+              return JSON.parse(raw) as string[];
+            } catch { return []; }
+          })();
+          originalsMap[item.id] = {
+            title: item.title,
+            description: item.description ?? null,
+            tags: parsedTags,
+            contentRating: item.contentRating ?? null,
+            contentType: item.contentType ?? null,
+          };
+        }
+        setBulkDiffOriginals(originalsMap);
+        setBulkDiffSuggestions(r.results as BulkSuggestion[]);
+        setBulkDiffOpen(true);
+      } else {
+        toast.info(r.message ?? "No videos needed enrichment.");
+        setSelectedIds(new Set());
+      }
     },
     onError: (e) => toast.error(`Bulk AI enrich failed: ${e.message}`),
   });
@@ -384,7 +413,7 @@ export default function Videos() {
   };
 
   const handleBulkAIEnrich = () => {
-    bulkEnrichMutation.mutate({ videoIds: Array.from(selectedIds), apply: true });
+    bulkEnrichMutation.mutate({ videoIds: Array.from(selectedIds), apply: false });
   };
 
   const bulkStatusMutation = trpc.videos.bulkUpdateStatus.useMutation({
@@ -826,6 +855,19 @@ export default function Videos() {
           isAILoading={bulkEnrichMutation.isPending}
         />
       )}
+
+      {/* Bulk Diff Review Dialog */}
+      <BulkDiffReviewDialog
+        open={bulkDiffOpen}
+        onClose={() => setBulkDiffOpen(false)}
+        suggestions={bulkDiffSuggestions}
+        originalVideos={bulkDiffOriginals}
+        onApplied={() => {
+          setSelectedIds(new Set());
+          setBulkDiffOpen(false);
+          refetch();
+        }}
+      />
 
       {/* AI Diff Dialog */}
       {diffVideo && (

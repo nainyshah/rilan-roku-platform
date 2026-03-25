@@ -30,7 +30,9 @@ type EnrichResult = {
   description: string;
   tags: string[];
   contentRating: string;
+  contentType: string | null;
   reasoning: string;
+  streamInferenceHints: string[];
 };
 
 const VALID_RATINGS = ["all", "G", "PG", "PG-13", "R", "NC-17", "TV-Y", "TV-Y7", "TV-G", "TV-PG", "TV-14", "TV-MA"] as const;
@@ -42,8 +44,53 @@ function getLLMContent(response: Awaited<ReturnType<typeof invokeLLM>>): string 
   return typeof raw === "string" ? raw : JSON.stringify(raw);
 }
 
+// ─── Stream URL inference helper ────────────────────────────────────────────
+type StreamInference = {
+  suggestedContentType: string | null;
+  suggestedContentRating: string | null;
+  hints: string[];
+};
+function inferStreamUrlMetadata(streamUrl: string | null): StreamInference {
+  if (!streamUrl) return { suggestedContentType: null, suggestedContentRating: null, hints: [] };
+  const url = streamUrl.toLowerCase();
+  const hints: string[] = [];
+  // Content type inference from URL patterns
+  let suggestedContentType: string | null = null;
+  if (url.includes(".m3u8") || url.includes("/hls/") || url.includes("manifest.m3u8")) {
+    suggestedContentType = "movie";
+    hints.push("HLS stream detected — likely long-form content (movie/episode)");
+  } else if (url.includes(".mpd") || url.includes("/dash/") || url.includes("manifest.mpd")) {
+    suggestedContentType = "movie";
+    hints.push("DASH stream detected — likely long-form content (movie/episode)");
+  } else if (url.includes(".mp4") || url.includes("/mp4/")) {
+    suggestedContentType = "clip";
+    hints.push("MP4 file detected — likely short-form clip");
+  }
+  // Short-form signals
+  if (url.includes("short") || url.includes("clip") || url.includes("trailer") || url.includes("preview")) {
+    suggestedContentType = "clip";
+    hints.push("URL path suggests short-form content");
+  }
+  // Episode/series signals
+  if (/s\d{1,2}e\d{1,2}/.test(url) || url.includes("/episode/") || url.includes("/series/")) {
+    suggestedContentType = "episode";
+    hints.push("URL path suggests episode/series content");
+  }
+  // Content rating inference from URL patterns
+  let suggestedContentRating: string | null = null;
+  if (url.includes("/kids/") || url.includes("/children/") || url.includes("/family/") || url.includes("/tvy/")) {
+    suggestedContentRating = "TV-Y";
+    hints.push("URL path suggests children/family content (TV-Y)");
+  } else if (url.includes("/mature/") || url.includes("/adult/") || url.includes("/r18/") || url.includes("/tvma/")) {
+    suggestedContentRating = "TV-MA";
+    hints.push("URL path suggests mature content (TV-MA)");
+  } else if (url.includes("/pg/") || url.includes("/family") || url.includes("/tvpg/")) {
+    suggestedContentRating = "TV-PG";
+    hints.push("URL path suggests general audience content (TV-PG)");
+  }
+  return { suggestedContentType, suggestedContentRating, hints };
+}
 // ─── Core enrichment helper ───────────────────────────────────────────────────
-
 async function enrichSingleVideo(video: VideoRow): Promise<EnrichResult> {
   const existingTags: string[] = (() => {
     try {
@@ -54,7 +101,13 @@ async function enrichSingleVideo(video: VideoRow): Promise<EnrichResult> {
       return [];
     }
   })();
-
+  // Infer content type and rating from stream URL
+  const streamInference = inferStreamUrlMetadata(video.streamUrl);
+  const inferenceContext = streamInference.hints.length > 0
+    ? `\nStream URL Analysis:\n${streamInference.hints.map((h) => `- ${h}`).join("\n")}${streamInference.suggestedContentType ? `\n- Suggested content type: ${streamInference.suggestedContentType}` : ""}${streamInference.suggestedContentRating ? `\n- Suggested content rating: ${streamInference.suggestedContentRating}` : ""}`
+    : "";
+  const effectiveContentType = streamInference.suggestedContentType ?? video.contentType ?? "clip";
+  const effectiveContentRating = streamInference.suggestedContentRating ?? video.contentRating ?? "all";
   const response = await invokeLLM({
     messages: [
       {
@@ -64,21 +117,20 @@ async function enrichSingleVideo(video: VideoRow): Promise<EnrichResult> {
       {
         role: "user",
         content: `Given this video metadata, generate improved SEO-friendly content for the Roku Direct Publisher feed.
-
 Current metadata:
 - Title: ${video.title}
 - Description: ${video.description || "(none)"}
-- Content Type: ${video.contentType || "clip"}
-- Content Rating: ${video.contentRating || "all"}
+- Content Type: ${effectiveContentType}
+- Content Rating: ${effectiveContentRating}
 - Language: ${video.language || "en"}
 - Duration: ${video.durationSeconds ? `${Math.floor(video.durationSeconds / 60)} minutes` : "unknown"}
-- Existing Tags: ${existingTags.length > 0 ? existingTags.join(", ") : "(none)"}
-
+- Existing Tags: ${existingTags.length > 0 ? existingTags.join(", ") : "(none)"}${inferenceContext}
 Requirements:
 1. Title: Concise (max 100 chars), engaging, accurate.
 2. Description: 2-3 sentences (100-300 chars), compelling, suitable for Roku channel listings.
 3. Tags: 5-10 relevant lowercase tags.
-4. ContentRating: One of: all, G, PG, PG-13, R, NC-17, TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA.`,
+4. ContentRating: One of: all, G, PG, PG-13, R, NC-17, TV-Y, TV-Y7, TV-G, TV-PG, TV-14, TV-MA. Use the stream URL analysis as a strong signal.
+5. ContentType: One of: movie, episode, clip, short-form. Use the stream URL analysis as a strong signal.`,
       },
     ],
     response_format: {
@@ -93,16 +145,17 @@ Requirements:
             description: { type: "string" },
             tags: { type: "array", items: { type: "string" } },
             contentRating: { type: "string" },
+            contentType: { type: "string" },
             reasoning: { type: "string" },
           },
-          required: ["title", "description", "tags", "contentRating", "reasoning"],
+          required: ["title", "description", "tags", "contentRating", "contentType", "reasoning"],
           additionalProperties: false,
         },
       },
     },
   });
-
-  return JSON.parse(getLLMContent(response)) as EnrichResult;
+  const parsed = JSON.parse(getLLMContent(response)) as Omit<EnrichResult, "streamInferenceHints">;
+  return { ...parsed, streamInferenceHints: streamInference.hints };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
