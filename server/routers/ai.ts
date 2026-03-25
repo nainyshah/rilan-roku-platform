@@ -32,6 +32,7 @@ type EnrichResult = {
   contentRating: string;
   contentType: string | null;
   reasoning: string;
+  confidence: number;
   streamInferenceHints: string[];
 };
 
@@ -147,15 +148,18 @@ Requirements:
             contentRating: { type: "string" },
             contentType: { type: "string" },
             reasoning: { type: "string" },
+            confidence: { type: "integer", description: "Overall confidence score 0-100 for these suggestions based on available metadata quality" },
           },
-          required: ["title", "description", "tags", "contentRating", "contentType", "reasoning"],
+          required: ["title", "description", "tags", "contentRating", "contentType", "reasoning", "confidence"],
           additionalProperties: false,
         },
       },
     },
   });
   const parsed = JSON.parse(getLLMContent(response)) as Omit<EnrichResult, "streamInferenceHints">;
-  return { ...parsed, streamInferenceHints: streamInference.hints };
+  // Clamp confidence to 0-100 range
+  const confidence = Math.max(0, Math.min(100, typeof parsed.confidence === "number" ? parsed.confidence : 70));
+  return { ...parsed, confidence, streamInferenceHints: streamInference.hints };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────

@@ -258,3 +258,8 @@
 - [x] AI bulk enrich diff review: backend returns all suggestions without applying, frontend shows paginated diff dialog before saving
 - [x] AI stream URL inference: detect content type (HLS/DASH/MP4/short-form) and suggest content rating from URL patterns
 - [x] AI job history auto-polling: poll every 5s when any job is pending/running, stop when all complete
+
+## AI Enhancements (2026-03-25 batch 4)
+- [x] Bulk diff dialog: add Approve All Fields button
+- [x] AI diff dialogs: display confidence score as colored badge per suggestion
+- [x] AI Features page: wire channel-level bulk enrich to BulkDiffReviewDialog

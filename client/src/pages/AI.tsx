@@ -25,6 +25,7 @@ import {
   Zap,
   RotateCcw,
 } from "lucide-react";
+import { BulkDiffReviewDialog, type BulkSuggestion } from "@/components/BulkDiffReviewDialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -151,18 +152,37 @@ function JobRow({ job, onRetry, isRetrying }: { job: AiJob; onRetry: (id: number
 function BulkEnrichPanel() {
   const [channelId, setChannelId] = useState<string>("");
   const [onlyMissing, setOnlyMissing] = useState(true);
-  const [apply, setApply] = useState(false);
   const [limit, setLimit] = useState("20");
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffSuggestions, setDiffSuggestions] = useState<BulkSuggestion[]>([]);
+  const [diffOriginals, setDiffOriginals] = useState<Record<number, { title: string; description: string | null; tags: string[]; contentRating: string | null; contentType: string | null }>>({});
 
   const { data: channels } = trpc.channels.list.useQuery();
   const utils = trpc.useUtils();
 
   const bulkEnrich = trpc.ai.bulkEnrich.useMutation({
     onSuccess: (data) => {
-      toast.success(data.processed > 0 ? "Bulk Enrichment Complete" : "Nothing to Enrich", {
-        description: data.message ?? `Processed ${data.processed} videos. ${data.failed > 0 ? `${data.failed} failed.` : ""}`,
-      });
       utils.ai.listJobs.invalidate();
+      // Build original video map from result titles (backend includes original title per result)
+      const origMap: Record<number, { title: string; description: string | null; tags: string[]; contentRating: string | null; contentType: string | null }> = {};
+      for (const r of (data.results ?? [])) {
+        origMap[r.videoId] = {
+          title: r.title,
+          description: null,
+          tags: [],
+          contentRating: null,
+          contentType: null,
+        };
+      }
+      if (data.results && data.results.length > 0) {
+        setDiffOriginals(origMap);
+        setDiffSuggestions(data.results as BulkSuggestion[]);
+        setDiffOpen(true);
+      } else {
+        toast.success(data.processed > 0 ? "Bulk Enrichment Complete" : "Nothing to Enrich", {
+          description: data.message ?? `Processed ${data.processed} videos.`,
+        });
+      }
     },
     onError: (err) => {
       toast.error("Bulk Enrichment Failed", { description: err.message });
@@ -223,36 +243,14 @@ function BulkEnrichPanel() {
             </div>
             <Switch checked={onlyMissing} onCheckedChange={setOnlyMissing} />
           </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-sm">Apply changes immediately</Label>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger>
-                      <Info className="w-3.5 h-3.5 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs max-w-48">When off, results are returned as a preview only — no video data is changed.</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <p className="text-xs text-muted-foreground">Write AI-generated content back to video records</p>
-            </div>
-            <Switch checked={apply} onCheckedChange={setApply} />
-          </div>
         </div>
 
-        {apply && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-300">
-              <strong>Apply mode is on.</strong> AI-generated titles, descriptions, tags, and content ratings will overwrite existing video data. This cannot be undone automatically.
-            </p>
-          </div>
-        )}
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <Info className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+          <p className="text-xs text-blue-300">
+            AI suggestions will be shown in a review dialog before any changes are saved. You can approve or reject individual fields per video.
+          </p>
+        </div>
 
         <Button
           className="w-full"
@@ -261,18 +259,29 @@ function BulkEnrichPanel() {
             bulkEnrich.mutate({
               channelId: Number(channelId),
               onlyMissing,
-              apply,
+              apply: false, // always preview first — diff dialog handles apply
               limit: Number(limit),
             })
           }
         >
           {bulkEnrich.isPending ? (
-            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
+            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating Suggestions...</>
           ) : (
-            <><Layers className="w-4 h-4 mr-2" /> Run Bulk Enrichment</>
+            <><Sparkles className="w-4 h-4 mr-2" /> Preview AI Suggestions</>
           )}
         </Button>
       </CardContent>
+
+      <BulkDiffReviewDialog
+        open={diffOpen}
+        onClose={() => setDiffOpen(false)}
+        suggestions={diffSuggestions}
+        originalVideos={diffOriginals}
+        onApplied={() => {
+          utils.ai.listJobs.invalidate();
+          utils.videos.list.invalidate();
+        }}
+      />
     </Card>
   );
 }

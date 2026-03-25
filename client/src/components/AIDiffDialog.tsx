@@ -1,6 +1,7 @@
 /**
  * AIDiffDialog — shows original vs AI-suggested metadata side-by-side.
  * The user can toggle individual fields on/off before applying.
+ * Displays a confidence score badge and supports Approve All Fields.
  */
 
 import { useState } from "react";
@@ -16,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Sparkles, CheckCircle, XCircle, Loader2, AlertTriangle, CheckCheck } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +27,7 @@ export interface AISuggestion {
   tags: string[];
   contentRating: string;
   reasoning: string;
+  confidence?: number;
 }
 
 export interface OriginalValues {
@@ -53,6 +55,27 @@ interface AIDiffDialogProps {
   isApplying: boolean;
   onApprove: (approved: ApprovedFields) => void;
   onDiscard: () => void;
+}
+
+// ─── Confidence badge ─────────────────────────────────────────────────────────
+
+function ConfidenceBadge({ score }: { score: number }) {
+  const clamped = Math.max(0, Math.min(100, score));
+  let colorClass = "border-emerald-500/40 text-emerald-400 bg-emerald-500/10";
+  let label = "High";
+  if (clamped < 50) {
+    colorClass = "border-red-500/40 text-red-400 bg-red-500/10";
+    label = "Low";
+  } else if (clamped < 75) {
+    colorClass = "border-amber-500/40 text-amber-400 bg-amber-500/10";
+    label = "Medium";
+  }
+  return (
+    <Badge variant="outline" className={`text-xs gap-1 ${colorClass}`}>
+      <Sparkles className="w-3 h-3" />
+      {label} confidence · {clamped}%
+    </Badge>
+  );
 }
 
 // ─── Diff field component ─────────────────────────────────────────────────────
@@ -263,19 +286,38 @@ export default function AIDiffDialog({
     });
   };
 
+  const handleApproveAll = () => {
+    if (!suggestion) return;
+    onApprove({
+      title: suggestion.title,
+      description: suggestion.description,
+      tags: suggestion.tags,
+      contentRating: suggestion.contentRating,
+    });
+  };
+
   const anyFieldEnabled = useTitle || useDescription || useTags || useRating;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!isApplying) onOpenChange(v); }}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-purple-400" />
-            AI Enrichment Review
-          </DialogTitle>
-          <DialogDescription className="text-sm">
-            Review AI suggestions for <strong className="text-foreground">{videoTitle}</strong>. Toggle fields to include or exclude them before applying.
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                AI Enrichment Review
+              </DialogTitle>
+              <DialogDescription className="text-sm mt-1">
+                Review AI suggestions for <strong className="text-foreground">{videoTitle}</strong>. Toggle fields to include or exclude them before applying.
+              </DialogDescription>
+            </div>
+            {suggestion?.confidence !== undefined && (
+              <div className="shrink-0 pt-0.5">
+                <ConfidenceBadge score={suggestion.confidence} />
+              </div>
+            )}
+          </div>
         </DialogHeader>
 
         <ScrollArea className="flex-1 -mx-6 px-6 overflow-y-auto">
@@ -349,18 +391,31 @@ export default function AIDiffDialog({
             <XCircle className="w-4 h-4 mr-1.5" />
             Discard
           </Button>
-          <Button
-            onClick={handleApprove}
-            disabled={!suggestion || isApplying || isLoading || !anyFieldEnabled}
-            className="gap-1.5"
-          >
-            {isApplying ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <CheckCircle className="w-4 h-4" />
+          <div className="flex items-center gap-2">
+            {suggestion && !isLoading && (
+              <Button
+                variant="outline"
+                onClick={handleApproveAll}
+                disabled={isApplying}
+                className="gap-1.5 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+              >
+                <CheckCheck className="w-4 h-4" />
+                Approve All Fields
+              </Button>
             )}
-            {isApplying ? "Applying…" : "Apply Selected Fields"}
-          </Button>
+            <Button
+              onClick={handleApprove}
+              disabled={!suggestion || isApplying || isLoading || !anyFieldEnabled}
+              className="gap-1.5"
+            >
+              {isApplying ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
+              {isApplying ? "Applying…" : "Apply Selected Fields"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

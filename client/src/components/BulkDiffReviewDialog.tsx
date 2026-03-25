@@ -2,6 +2,7 @@
  * BulkDiffReviewDialog
  * Shows a paginated diff of all AI-suggested changes from a bulk enrichment run.
  * Users can approve/reject individual fields per video, then apply only approved changes.
+ * Displays confidence score badge per video and supports Approve All Fields shortcut.
  */
 import { useState, useMemo } from "react";
 import {
@@ -27,6 +28,7 @@ import {
   AlertTriangle,
   Loader2,
   Info,
+  CheckCheck,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -39,6 +41,7 @@ type EnrichResult = {
   contentRating: string;
   contentType: string | null;
   reasoning: string;
+  confidence?: number;
   streamInferenceHints?: string[];
 };
 
@@ -72,6 +75,26 @@ type Props = {
 };
 
 const PAGE_SIZE = 1;
+
+// ─── Confidence badge ─────────────────────────────────────────────────────────
+function ConfidenceBadge({ score }: { score: number }) {
+  const clamped = Math.max(0, Math.min(100, score));
+  let colorClass = "border-emerald-500/40 text-emerald-400 bg-emerald-500/10";
+  let label = "High";
+  if (clamped < 50) {
+    colorClass = "border-red-500/40 text-red-400 bg-red-500/10";
+    label = "Low";
+  } else if (clamped < 75) {
+    colorClass = "border-amber-500/40 text-amber-400 bg-amber-500/10";
+    label = "Medium";
+  }
+  return (
+    <Badge variant="outline" className={`text-xs gap-1 ${colorClass}`}>
+      <Sparkles className="w-3 h-3" />
+      {label} · {clamped}%
+    </Badge>
+  );
+}
 
 // ─── Field diff row ────────────────────────────────────────────────────────────
 function FieldDiff({
@@ -179,6 +202,17 @@ export function BulkDiffReviewDialog({ open, onClose, suggestions, originalVideo
     }));
   }
 
+  function handleApproveAllFields() {
+    if (!current) return;
+    setApprovals((prev) => ({
+      ...prev,
+      [current.videoId]: {
+        approved: true,
+        fields: { title: true, description: true, tags: true, contentRating: true, contentType: true },
+      },
+    }));
+  }
+
   async function handleApply() {
     const toApply = successSuggestions.filter((s) => approvals[s.videoId]?.approved && s.result);
     if (toApply.length === 0) {
@@ -221,21 +255,31 @@ export function BulkDiffReviewDialog({ open, onClose, suggestions, originalVideo
   const result = current.result!;
   const origTags = (currentOriginal.tags ?? []).join(", ");
   const sugTags = (result.tags ?? []).join(", ");
+  const confidence = result.confidence;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !applying && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border shrink-0">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-purple-400" />
-            <DialogTitle>Review AI Suggestions</DialogTitle>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-purple-400" />
+                <DialogTitle>Review AI Suggestions</DialogTitle>
+              </div>
+              <DialogDescription className="mt-1">
+                {successSuggestions.length} video{successSuggestions.length !== 1 ? "s" : ""} enriched
+                {failedCount > 0 && ` · ${failedCount} failed`}
+                {" · "}
+                {approvedCount} selected for apply
+              </DialogDescription>
+            </div>
+            {confidence !== undefined && (
+              <div className="shrink-0 pt-0.5">
+                <ConfidenceBadge score={confidence} />
+              </div>
+            )}
           </div>
-          <DialogDescription>
-            {successSuggestions.length} video{successSuggestions.length !== 1 ? "s" : ""} enriched
-            {failedCount > 0 && ` · ${failedCount} failed`}
-            {" · "}
-            {approvedCount} selected for apply
-          </DialogDescription>
         </DialogHeader>
 
         {/* Progress bar when applying */}
@@ -261,25 +305,38 @@ export function BulkDiffReviewDialog({ open, onClose, suggestions, originalVideo
               <p className="text-xs text-muted-foreground">Video {page + 1} of {totalPages}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            {/* Approve All Fields for current video */}
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
+              variant="outline"
+              size="sm"
+              onClick={handleApproveAllFields}
+              disabled={applying}
+              className="h-7 text-xs gap-1 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <CheckCheck className="h-3.5 w-3.5" />
+              Approve All
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page === totalPages - 1}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page === totalPages - 1}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
