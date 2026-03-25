@@ -437,6 +437,16 @@ export default function Videos() {
     return m;
   }, [scheduleData]);
 
+  // AI enrichment history per video on this page
+  const { data: enrichHistoryData } = trpc.ai.videoEnrichHistory.useQuery(
+    { videoIds },
+    { enabled: videoIds.length > 0, staleTime: 60_000 }
+  );
+  const enrichHistoryMap = useMemo(() => {
+    if (!enrichHistoryData) return new Map<number, { jobId: number; enrichedAt: Date | null; confidence: number | null }>();
+    return new Map(Object.entries(enrichHistoryData).map(([k, v]) => [Number(k), v]));
+  }, [enrichHistoryData]);
+
   const pageItems = data?.items ?? [];
   const totalPages = Math.ceil((data?.total ?? 0) / 20);
 
@@ -737,14 +747,42 @@ export default function Videos() {
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="h-7 w-7 p-0"
+                                    className="h-7 w-7 p-0 relative"
                                     disabled={enrichVideoMutation.isPending}
                                     onClick={() => openAIDiff(video)}
                                   >
-                                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                                    {(() => {
+                                      const h = enrichHistoryMap.get(video.id);
+                                      const c = h?.confidence;
+                                      const color = c === null || c === undefined ? "text-purple-400" : c >= 75 ? "text-emerald-400" : c >= 50 ? "text-amber-400" : "text-red-400";
+                                      return <Sparkles className={`h-3.5 w-3.5 ${color}`} />;
+                                    })()}
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>AI Enrich</TooltipContent>
+                                <TooltipContent className="max-w-52">
+                                  {(() => {
+                                    const h = enrichHistoryMap.get(video.id);
+                                    if (!h) return <span>AI Enrich — never enriched</span>;
+                                    const ago = h.enrichedAt
+                                      ? (() => {
+                                          const diff = Date.now() - new Date(h.enrichedAt).getTime();
+                                          const mins = Math.floor(diff / 60000);
+                                          const hrs = Math.floor(diff / 3600000);
+                                          const days = Math.floor(diff / 86400000);
+                                          return days > 0 ? `${days}d ago` : hrs > 0 ? `${hrs}h ago` : `${mins}m ago`;
+                                        })()
+                                      : "unknown";
+                                    const c = h.confidence;
+                                    const badgeColor = c !== null && c >= 75 ? "text-emerald-400" : c !== null && c >= 50 ? "text-amber-400" : "text-red-400";
+                                    return (
+                                      <div className="space-y-0.5">
+                                        <div className="font-medium">AI Enrich</div>
+                                        <div className="text-xs text-muted-foreground">Last enriched: {ago}</div>
+                                        {c !== null && <div className={`text-xs font-medium ${badgeColor}`}>Confidence: {c}%</div>}
+                                      </div>
+                                    );
+                                  })()}
+                                </TooltipContent>
                               </Tooltip>
                               <Tooltip>
                                 <TooltipTrigger asChild>

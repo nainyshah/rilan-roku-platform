@@ -263,3 +263,7 @@
 - [x] Bulk diff dialog: add Approve All Fields button
 - [x] AI diff dialogs: display confidence score as colored badge per suggestion
 - [x] AI Features page: wire channel-level bulk enrich to BulkDiffReviewDialog
+
+## AI Enhancements (2026-03-25 batch 5)
+- [x] Backend: ai.videoEnrichHistory tRPC query — return last enrichment job (date, confidence, jobId) per videoId
+- [x] Frontend: Videos table Sparkles button — tooltip showing "Last AI enriched: X days ago · Confidence: N%" (or "Never enriched" if no history)

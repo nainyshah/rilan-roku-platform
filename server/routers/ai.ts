@@ -738,4 +738,45 @@ Respond with JSON: { "description": "...", "reasoning": "..." }`,
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err instanceof Error ? err.message : String(err) });
       }
     }),
+
+  /** Get last AI enrichment job per video ID */
+  videoEnrichHistory: adminProcedure
+    .input(z.object({ videoIds: z.array(z.number().int().positive()).min(1).max(200) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const jobs = await db
+        .select({
+          id: aiJobs.id,
+          videoId: aiJobs.videoId,
+          outputPayload: aiJobs.outputPayload,
+          completedAt: aiJobs.completedAt,
+          createdAt: aiJobs.createdAt,
+        })
+        .from(aiJobs)
+        .where(
+          and(
+            eq(aiJobs.jobType, "enrich_video"),
+            eq(aiJobs.status, "completed"),
+            input.videoIds.length === 1
+              ? eq(aiJobs.videoId, input.videoIds[0])
+              : or(...input.videoIds.map((id) => eq(aiJobs.videoId, id)))
+          )
+        )
+        .orderBy(desc(aiJobs.completedAt));
+      // Keep only the most recent job per videoId
+      const historyMap: Record<number, { jobId: number; enrichedAt: Date | null; confidence: number | null }> = {};
+      for (const job of jobs) {
+        if (job.videoId === null) continue;
+        if (historyMap[job.videoId]) continue;
+        const payload = job.outputPayload as Record<string, unknown> | null;
+        const confidence = typeof payload?.confidence === "number" ? payload.confidence : null;
+        historyMap[job.videoId] = {
+          jobId: job.id,
+          enrichedAt: job.completedAt ?? job.createdAt,
+          confidence,
+        };
+      }
+      return historyMap;
+    }),
 });
