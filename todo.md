@@ -282,3 +282,8 @@
 - [x] Uptime sparkline: 24h bar chart of green/red poll outcomes in Dashboard
 - [x] Recovery notification: notifyOwner push when server transitions failed → recovered
 - [x] Stale-data indicator: amber border + badge on stat cards when lastSyncedAt > 5 min old
+
+## Operator Dashboard Features (2026-03-26)
+- [x] Sparkline drill-down: slide-over panel with raw poll timestamps and latency per 30-min bucket
+- [x] Configurable stale threshold: Settings page where operators set the stale-data warning boundary
+- [x] Notification counter badge: Dashboard header badge counting recovery notifications sent this session

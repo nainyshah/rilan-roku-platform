@@ -70,6 +70,7 @@ const publishMenuItems = [
 
 const aiMenuItems = [
   { icon: Sparkles, label: "AI Features", path: "/ai" },
+  { icon: Settings, label: "Settings", path: "/settings" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

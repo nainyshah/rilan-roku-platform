@@ -23,6 +23,7 @@
 import { useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
 import { retryEvents } from '@/lib/retryEvents';
+import { incrementNotificationCount } from '@/hooks/useNotificationCounter';
 
 // ── Module-level deduplication guard ─────────────────────────────────────────
 // Tracks whether the last known retry state was "failed" so we can detect
@@ -41,6 +42,8 @@ export function useRecoveryNotification() {
     onSuccess: (data) => {
       if (data.success) {
         console.info('[RecoveryNotification] Owner notified of service recovery.');
+        // Increment the session-level counter so the Dashboard header badge updates.
+        incrementNotificationCount();
       } else {
         console.warn('[RecoveryNotification] Notification delivery failed (upstream unavailable).');
       }

@@ -6,6 +6,8 @@ import { Film, Tv, CheckCircle, AlertTriangle, FileText, Clock, Radio, ArrowRigh
 import { useLocation } from "wouter";
 import { useState, useEffect, useCallback } from "react";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
+import { useStaleThreshold } from "@/hooks/useStaleThreshold";
+import { useNotificationCounter } from "@/hooks/useNotificationCounter";
 import { UptimeSparkline } from "@/components/UptimeSparkline";
 // ─── Health check hookk ────────────────────────────────────────────────────────
 type HealthStatus = "checking" | "ok" | "degraded" | "down";
@@ -236,6 +238,8 @@ export default function Dashboard() {
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
   const { health, refresh: refreshHealth } = useHealthCheck(60_000);
   const { lastSyncedAt, uptimePct: polledUptimePct, pollCount } = useSyncStatus();
+  const { thresholdMs: STALE_THRESHOLD_MS, thresholdMinutes: staleThresholdMinutes } = useStaleThreshold();
+  const { count: notificationCount, reset: resetNotifications } = useNotificationCounter();
 
   // Tick every 30 s so the relative label ("2m ago") stays current and
   // the stale-data indicator re-evaluates on each tick.
@@ -246,11 +250,9 @@ export default function Dashboard() {
   }, []);
 
   /**
-   * isStale — true when the last confirmed-fresh sync is more than 5 minutes
-   * old (or has never happened). Used to apply amber borders and a "Stale"
-   * badge to stat cards so operators know the numbers may be outdated.
+   * isStale — true when the last confirmed-fresh sync is older than the
+   * operator-configured stale threshold (default 5 min, configurable in Settings).
    */
-  const STALE_THRESHOLD_MS = 5 * 60 * 1000;
   const isStale = !lastSyncedAt || (Date.now() - lastSyncedAt.getTime()) > STALE_THRESHOLD_MS;
 
   const statCards = [
@@ -353,6 +355,21 @@ export default function Dashboard() {
             onRefresh={refreshHealth}
           />
 
+          {/* ── Notification counter badge — increments on each recovery notification sent */}
+          {notificationCount > 0 && (
+            <button
+              onClick={resetNotifications}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors group"
+              title={`${notificationCount} recovery notification${notificationCount !== 1 ? 's' : ''} sent this session — click to reset`}
+            >
+              <Wifi className="h-3 w-3 text-emerald-400" />
+              <span className="text-xs font-semibold text-emerald-400 tabular-nums">{notificationCount}</span>
+              <span className="text-xs text-emerald-400/70 hidden sm:inline">
+                notification{notificationCount !== 1 ? 's' : ''} sent
+              </span>
+            </button>
+          )}
+
           <div className="flex items-center gap-2">
             <Radio className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium text-muted-foreground">RILAN GAMES LLC</span>
@@ -361,8 +378,9 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      {/* When data is stale (lastSyncedAt > 5 min ago), cards get an amber border
-          and a small "Stale" badge to signal that numbers may be outdated. */}
+      {/* When data is stale (lastSyncedAt > staleThresholdMinutes ago), cards get an amber border
+          and a small "Stale" badge to signal that numbers may be outdated.
+          Threshold is configurable in Settings (default 5 min). */}
       {isStale && lastSyncedAt && (
         <div className="flex items-center gap-1.5 -mb-1">
           <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
@@ -392,7 +410,7 @@ export default function Dashboard() {
                 {isStale && (
                   <span
                     className="text-xs font-medium text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded"
-                    title="Data may be outdated — server sync is overdue"
+                    title={`Data may be outdated — last sync was more than ${staleThresholdMinutes} min ago`}
                   >
                     Stale
                   </span>

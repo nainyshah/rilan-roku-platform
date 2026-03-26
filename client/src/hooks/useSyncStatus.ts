@@ -7,13 +7,8 @@
  *   - uptimePct: rolling 24-hour uptime percentage derived from health-poll
  *     outcomes (persisted to localStorage alongside the existing Dashboard history)
  *
- * This hook is the single source of truth for sync metadata consumed by:
- *   - Dashboard header "Last synced" label
- *   - Dashboard HealthBadge uptime percentage
- *   - Any future component that needs to know when data was last confirmed fresh
- *
- * It subscribes to the global retryEvents bus so it stays in sync with
- * useHealthPolling without requiring prop drilling.
+ * Each PollEntry now includes an optional `latencyMs` field so the
+ * SparklineDrillDown panel can display response times per bucket.
  */
 
 import { useEffect, useState } from 'react';
@@ -24,12 +19,13 @@ const LAST_SYNCED_KEY = 'rilan_last_synced_at';
 const POLL_HISTORY_KEY = 'rilan_poll_uptime_history';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface PollEntry {
-  ts: number;   // Unix ms
-  ok: boolean;  // true = healthy, false = failed
+export interface PollEntry {
+  ts: number;           // Unix ms — when the poll was recorded
+  ok: boolean;          // true = healthy, false = failed
+  latencyMs?: number;   // round-trip time in ms (undefined for retry-bus events)
 }
 
-const WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours — exported for tests
 
 // ── Persistence helpers ───────────────────────────────────────────────────────
 function loadLastSynced(): Date | null {
@@ -76,8 +72,6 @@ function computeUptime(history: PollEntry[]): number | null {
 }
 
 // ── Module-level state (singleton across all hook instances) ──────────────────
-// This ensures all components reading useSyncStatus see the same values
-// without needing a React context.
 let _lastSyncedAt: Date | null = loadLastSynced();
 let _pollHistory: PollEntry[] = loadPollHistory();
 let _uptimePct: number | null = computeUptime(_pollHistory);
@@ -89,8 +83,8 @@ function _notify() {
   _listeners.forEach((fn) => fn());
 }
 
-function _recordOutcome(ok: boolean) {
-  const entry: PollEntry = { ts: Date.now(), ok };
+function _recordOutcome(ok: boolean, latencyMs?: number) {
+  const entry: PollEntry = { ts: Date.now(), ok, ...(latencyMs !== undefined && { latencyMs }) };
   _pollHistory = [..._pollHistory, entry];
   savePollHistory(_pollHistory);
   _uptimePct = computeUptime(_pollHistory);
@@ -103,14 +97,13 @@ function _recordOutcome(ok: boolean) {
 }
 
 // Subscribe to the global retry event bus once at module load time.
-// This fires before any React component mounts, so the singleton is always
-// up-to-date regardless of which components are rendered.
 retryEvents.subscribe((event) => {
   if (event.type === 'recovered') _recordOutcome(true);
   if (event.type === 'failed')    _recordOutcome(false);
 });
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
+// ── Hooks ─────────────────────────────────────────────────────────────────────
+
 export interface SyncStatus {
   /** Timestamp of the last confirmed-healthy health poll. null until first success. */
   lastSyncedAt: Date | null;
@@ -123,8 +116,8 @@ export interface SyncStatus {
 /**
  * usePollHistory
  *
- * Returns the raw poll history array (last 24 h) and re-renders on every new
- * outcome. Used by UptimeSparkline to build the bar chart.
+ * Returns the raw poll history array (last 24 h) with latency metadata.
+ * Re-renders on every new outcome. Used by UptimeSparkline and SparklineDrillDown.
  */
 export function usePollHistory(): PollEntry[] {
   const [, forceUpdate] = useState(0);
@@ -159,17 +152,17 @@ export function useSyncStatus(): SyncStatus {
 }
 
 /**
- * Manually record a successful sync outcome.
+ * Manually record a successful sync outcome with optional latency.
  * Call this from useHealthPolling when a focus-based refetch succeeds.
  */
-export function recordSyncSuccess() {
-  _recordOutcome(true);
+export function recordSyncSuccess(latencyMs?: number) {
+  _recordOutcome(true, latencyMs);
 }
 
 /**
- * Manually record a failed sync outcome.
+ * Manually record a failed sync outcome with optional latency.
  * Call this from useHealthPolling when a health check fails.
  */
-export function recordSyncFailure() {
-  _recordOutcome(false);
+export function recordSyncFailure(latencyMs?: number) {
+  _recordOutcome(false, latencyMs);
 }

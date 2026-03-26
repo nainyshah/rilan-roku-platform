@@ -24,6 +24,10 @@ const HEALTH_TIMEOUT_MS = 8_000;
  *    while the tab is visible to detect server restarts early and keep
  *    the retry-event state accurate.
  *
+ * Latency (round-trip ms) is measured for every poll and forwarded to
+ * recordSyncSuccess/recordSyncFailure so the SparklineDrillDown panel
+ * can display response times per 30-minute bucket.
+ *
  * Mount this hook once at the app root (e.g., inside App.tsx).
  */
 export function useHealthPolling() {
@@ -32,7 +36,12 @@ export function useHealthPolling() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPollingRef = useRef(false);
 
-  const checkHealth = async (): Promise<boolean> => {
+  /**
+   * Fetch /api/health and return { healthy, latencyMs }.
+   * latencyMs is the wall-clock round-trip time regardless of success/failure.
+   */
+  const checkHealth = async (): Promise<{ healthy: boolean; latencyMs: number }> => {
+    const start = Date.now();
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
@@ -42,16 +51,13 @@ export function useHealthPolling() {
         credentials: 'include',
       });
       clearTimeout(timeoutId);
-      return res.ok;
+      return { healthy: res.ok, latencyMs: Date.now() - start };
     } catch {
-      return false;
+      return { healthy: false, latencyMs: Date.now() - start };
     }
   };
 
   const invalidateAllQueries = () => {
-    // Invalidate every cached query so components re-fetch in the background.
-    // This is non-blocking — components keep showing stale data until the
-    // fresh response arrives.
     queryClient.invalidateQueries();
   };
 
@@ -73,13 +79,13 @@ export function useHealthPolling() {
       if (hiddenDuration < FOCUS_STALE_THRESHOLD_MS) return;
 
       // Tab was hidden long enough — check server health
-      const healthy = await checkHealth();
+      const { healthy, latencyMs } = await checkHealth();
       if (healthy) {
         invalidateAllQueries();
         retryEvents.emit({ type: 'recovered' });
-        recordSyncSuccess();
+        recordSyncSuccess(latencyMs);
       } else {
-        recordSyncFailure();
+        recordSyncFailure(latencyMs);
       }
     };
 
@@ -89,12 +95,12 @@ export function useHealthPolling() {
       isPollingRef.current = true;
       intervalRef.current = setInterval(async () => {
         if (document.visibilityState !== 'visible') return;
-        const healthy = await checkHealth();
+        const { healthy, latencyMs } = await checkHealth();
         if (healthy) {
           retryEvents.emit({ type: 'recovered' });
-          recordSyncSuccess();
+          recordSyncSuccess(latencyMs);
         } else {
-          recordSyncFailure();
+          recordSyncFailure(latencyMs);
         }
       }, 60_000);
     };

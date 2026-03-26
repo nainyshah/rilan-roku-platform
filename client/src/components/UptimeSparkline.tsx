@@ -2,20 +2,17 @@
  * UptimeSparkline.tsx
  *
  * A compact 24-hour uptime bar chart rendered inside the Dashboard.
- * Each bar represents one poll outcome from useSyncStatus:
- *   - Green bar  → healthy (ok: true)
- *   - Red bar    → failed  (ok: false)
+ * Each bar represents one 30-minute bucket of poll outcomes:
+ *   - Green  → all checks healthy
+ *   - Amber  → mixed (some ok, some failed)
+ *   - Red    → all checks failed
+ *   - Grey   → no data
  *
- * The chart is intentionally minimal — no axes, no labels, no tooltip clutter —
- * so it reads as a visual pulse at a glance. A tooltip on hover reveals the
- * exact timestamp and result for each bar.
- *
- * Data source: the `_pollHistory` array exposed via `usePollHistory()` from
- * useSyncStatus. Bars are bucketed into up to 48 slots (30-min buckets over
- * 24 h) so the chart stays readable even with hundreds of raw entries.
+ * Clicking a bar opens the SparklineDrillDown slide-over panel showing
+ * the raw poll entries (timestamp, status, latency) for that bucket.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -25,40 +22,34 @@ import {
   XAxis,
 } from 'recharts';
 import { usePollHistory } from '@/hooks/useSyncStatus';
+import type { PollEntry } from '@/hooks/useSyncStatus';
+import { SparklineDrillDown } from '@/components/SparklineDrillDown';
+import type { DrillDownBucket } from '@/components/SparklineDrillDown';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const BUCKET_MS = 30 * 60 * 1000;   // 30 min
+const WINDOW_MS = 24 * 60 * 60 * 1000; // 24 h
+const BUCKET_COUNT = WINDOW_MS / BUCKET_MS; // 48 buckets
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface BucketEntry {
-  /** Slot label shown on hover, e.g. "14:30" */
   label: string;
-  /** 1 = all ok, 0 = all failed, fraction = mixed */
   ratio: number;
-  /** Number of raw poll entries in this bucket */
   count: number;
-  /** Whether any entry in this bucket was a failure */
   hasFail: boolean;
-  /** Whether any entry in this bucket was a success */
   hasOk: boolean;
-  /** Bucket start timestamp (ms) */
   ts: number;
+  entries: PollEntry[];   // raw poll entries in this bucket (for drill-down)
 }
 
 // ── Bucketing ─────────────────────────────────────────────────────────────────
 
-const BUCKET_MS = 30 * 60 * 1000; // 30-minute buckets
-const WINDOW_MS = 24 * 60 * 60 * 1000; // 24-hour window
-const BUCKET_COUNT = WINDOW_MS / BUCKET_MS; // 48 buckets
-
-interface RawEntry {
-  ts: number;
-  ok: boolean;
-}
-
-function bucketHistory(history: RawEntry[]): BucketEntry[] {
+function bucketHistory(history: PollEntry[]): BucketEntry[] {
   const now = Date.now();
   const windowStart = now - WINDOW_MS;
 
-  // Build 48 empty buckets aligned to 30-min boundaries
   const buckets: BucketEntry[] = Array.from({ length: BUCKET_COUNT }, (_, i) => {
     const bucketStart = windowStart + i * BUCKET_MS;
     const d = new Date(bucketStart);
@@ -66,15 +57,15 @@ function bucketHistory(history: RawEntry[]): BucketEntry[] {
     const m = d.getMinutes().toString().padStart(2, '0');
     return {
       label: `${h}:${m}`,
-      ratio: -1,   // -1 = no data
+      ratio: -1,
       count: 0,
       hasFail: false,
       hasOk: false,
       ts: bucketStart,
+      entries: [],
     };
   });
 
-  // Assign each poll entry to its bucket
   for (const entry of history) {
     if (entry.ts < windowStart || entry.ts > now) continue;
     const idx = Math.min(
@@ -83,32 +74,38 @@ function bucketHistory(history: RawEntry[]): BucketEntry[] {
     );
     const b = buckets[idx];
     b.count++;
+    b.entries.push(entry);
     if (entry.ok) b.hasOk = true;
     else b.hasFail = true;
   }
 
-  // Compute ratio for each populated bucket
   for (const b of buckets) {
     if (b.count === 0) {
-      b.ratio = -1; // no data
+      b.ratio = -1;
+    } else if (b.hasOk && b.hasFail) {
+      b.ratio = 0.5;
+    } else if (b.hasOk) {
+      b.ratio = 1;
     } else {
-      // Mixed bucket: ratio = fraction of ok entries
-      // We don't track individual counts, so use hasFail/hasOk heuristic:
-      // If both, show as degraded (0.5); if only ok, 1; if only fail, 0
-      if (b.hasOk && b.hasFail) b.ratio = 0.5;
-      else if (b.hasOk) b.ratio = 1;
-      else b.ratio = 0;
+      b.ratio = 0;
     }
   }
 
   return buckets;
 }
 
+// ── Bar colour ────────────────────────────────────────────────────────────────
+
+function barColor(ratio: number): string {
+  if (ratio < 0) return 'hsl(240 5% 26%)';
+  if (ratio === 1) return 'hsl(142 71% 45%)';
+  if (ratio === 0) return 'hsl(0 84% 60%)';
+  return 'hsl(38 92% 50%)';
+}
+
 // ── Custom Tooltip ────────────────────────────────────────────────────────────
 
-interface TooltipPayload {
-  payload?: BucketEntry;
-}
+interface TooltipPayload { payload?: BucketEntry }
 
 function SparklineTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayload[] }) {
   if (!active || !payload?.length || !payload[0].payload) return null;
@@ -118,7 +115,7 @@ function SparklineTooltip({ active, payload }: { active?: boolean; payload?: Too
     return (
       <div className="bg-popover border border-border rounded px-2 py-1 text-xs text-muted-foreground shadow-md">
         <p className="font-medium">{b.label}</p>
-        <p>No data</p>
+        <p>No data · Click to inspect</p>
       </div>
     );
   }
@@ -138,27 +135,16 @@ function SparklineTooltip({ active, payload }: { active?: boolean; payload?: Too
       <p className="font-medium text-foreground mb-0.5">{b.label}</p>
       <p className={`font-semibold ${statusColor}`}>{statusLabel}</p>
       <p className="text-muted-foreground">{b.count} check{b.count !== 1 ? 's' : ''}</p>
+      <p className="text-muted-foreground/60 mt-0.5">Click to inspect</p>
     </div>
   );
-}
-
-// ── Bar colour helper ─────────────────────────────────────────────────────────
-
-function barColor(ratio: number): string {
-  if (ratio < 0) return 'hsl(240 5% 26%)';     // no data — muted zinc
-  if (ratio === 1) return 'hsl(142 71% 45%)';   // all ok — emerald
-  if (ratio === 0) return 'hsl(0 84% 60%)';     // all failed — red
-  return 'hsl(38 92% 50%)';                     // mixed — amber
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface UptimeSparklineProps {
-  /** Override height in px (default 40) */
   height?: number;
-  /** Show the "24h uptime history" label above the chart (default true) */
   showLabel?: boolean;
-  /** Additional className for the outer wrapper */
   className?: string;
 }
 
@@ -169,67 +155,82 @@ export function UptimeSparkline({
 }: UptimeSparklineProps) {
   const history = usePollHistory();
   const buckets = useMemo(() => bucketHistory(history), [history]);
-
-  // Use a fixed bar value of 1 for all buckets — colour encodes the status
   const chartData = buckets.map((b) => ({ ...b, barValue: 1 }));
-
   const hasAnyData = history.length > 0;
 
+  // ── Drill-down state ────────────────────────────────────────────────────────
+  const [selectedBucket, setSelectedBucket] = useState<DrillDownBucket | null>(null);
+
+  const handleBarClick = (data: { activePayload?: { payload: BucketEntry }[] }) => {
+    if (!data?.activePayload?.length) return;
+    const b = data.activePayload[0].payload;
+    setSelectedBucket({
+      label: b.label,
+      ts: b.ts,
+      entries: b.entries,
+    });
+  };
+
   return (
-    <div className={`w-full ${className}`}>
-      {showLabel && (
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-muted-foreground">24h uptime history</span>
-          {!hasAnyData && (
-            <span className="text-xs text-muted-foreground/60 italic">Collecting data…</span>
-          )}
+    <>
+      <div className={`w-full ${className}`}>
+        {showLabel && (
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-muted-foreground">
+              24h uptime history
+              <span className="text-muted-foreground/50 ml-1">(click a bar to inspect)</span>
+            </span>
+            {!hasAnyData && (
+              <span className="text-xs text-muted-foreground/60 italic">Collecting data…</span>
+            )}
+          </div>
+        )}
+
+        <div style={{ height }} className="cursor-pointer">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              barCategoryGap="10%"
+              margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+              onClick={handleBarClick}
+            >
+              <XAxis dataKey="label" hide />
+              <Tooltip
+                content={<SparklineTooltip />}
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                wrapperStyle={{ zIndex: 50 }}
+              />
+              <Bar dataKey="barValue" radius={[2, 2, 0, 0]} isAnimationActive={false}>
+                {chartData.map((entry, index) => (
+                  <Cell key={index} fill={barColor(entry.ratio)} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      )}
 
-      <div style={{ height }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={chartData}
-            barCategoryGap="10%"
-            margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
-          >
-            {/* Hidden XAxis to satisfy recharts internals — no visible ticks */}
-            <XAxis dataKey="label" hide />
-
-            <Tooltip
-              content={<SparklineTooltip />}
-              cursor={false}
-              wrapperStyle={{ zIndex: 50 }}
-            />
-
-            <Bar dataKey="barValue" radius={[2, 2, 0, 0]} isAnimationActive={false}>
-              {chartData.map((entry, index) => (
-                <Cell key={index} fill={barColor(entry.ratio)} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {/* Legend */}
+        <div className="flex items-center gap-3 mt-1">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
+            <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" />OK
+          </span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
+            <span className="inline-block w-2 h-2 rounded-sm bg-amber-500" />Degraded
+          </span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
+            <span className="inline-block w-2 h-2 rounded-sm bg-red-500" />Failed
+          </span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
+            <span className="inline-block w-2 h-2 rounded-sm" style={{ background: 'hsl(240 5% 26%)' }} />No data
+          </span>
+        </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-3 mt-1">
-        <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
-          <span className="inline-block w-2 h-2 rounded-sm bg-emerald-500" />
-          OK
-        </span>
-        <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
-          <span className="inline-block w-2 h-2 rounded-sm bg-amber-500" />
-          Degraded
-        </span>
-        <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
-          <span className="inline-block w-2 h-2 rounded-sm bg-red-500" />
-          Failed
-        </span>
-        <span className="flex items-center gap-1 text-xs text-muted-foreground/70">
-          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: 'hsl(240 5% 26%)' }} />
-          No data
-        </span>
-      </div>
-    </div>
+      {/* Drill-down slide-over */}
+      <SparklineDrillDown
+        bucket={selectedBucket}
+        onClose={() => setSelectedBucket(null)}
+      />
+    </>
   );
 }
