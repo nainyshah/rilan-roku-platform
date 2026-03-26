@@ -6,8 +6,8 @@ import { Film, Tv, CheckCircle, AlertTriangle, FileText, Clock, Radio, ArrowRigh
 import { useLocation } from "wouter";
 import { useState, useEffect, useCallback } from "react";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
-
-// ─── Health check hook ────────────────────────────────────────────────────────
+import { UptimeSparkline } from "@/components/UptimeSparkline";
+// ─── Health check hookk ────────────────────────────────────────────────────────
 type HealthStatus = "checking" | "ok" | "degraded" | "down";
 
 interface HealthEntry {
@@ -237,12 +237,21 @@ export default function Dashboard() {
   const { health, refresh: refreshHealth } = useHealthCheck(60_000);
   const { lastSyncedAt, uptimePct: polledUptimePct, pollCount } = useSyncStatus();
 
-  // Tick every 30 s so the relative label ("2m ago") stays current
+  // Tick every 30 s so the relative label ("2m ago") stays current and
+  // the stale-data indicator re-evaluates on each tick.
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((n) => n + 1), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  /**
+   * isStale — true when the last confirmed-fresh sync is more than 5 minutes
+   * old (or has never happened). Used to apply amber borders and a "Stale"
+   * badge to stat cards so operators know the numbers may be outdated.
+   */
+  const STALE_THRESHOLD_MS = 5 * 60 * 1000;
+  const isStale = !lastSyncedAt || (Date.now() - lastSyncedAt.getTime()) > STALE_THRESHOLD_MS;
 
   const statCards = [
     {
@@ -352,16 +361,42 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
+      {/* When data is stale (lastSyncedAt > 5 min ago), cards get an amber border
+          and a small "Stale" badge to signal that numbers may be outdated. */}
+      {isStale && lastSyncedAt && (
+        <div className="flex items-center gap-1.5 -mb-1">
+          <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
+          <p className="text-xs text-amber-400/80">
+            Data may be outdated — last confirmed fresh{' '}
+            <span className="font-medium">{formatLastSynced(lastSyncedAt)}</span>
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {statCards.map((card) => (
           <Card
             key={card.title}
-            className="bg-card border-border cursor-pointer hover:border-primary/40 transition-colors group"
+            className={[
+              'cursor-pointer transition-colors group',
+              isStale
+                ? 'bg-card border-amber-500/30 hover:border-amber-500/60'
+                : 'bg-card border-border hover:border-primary/40',
+            ].join(' ')}
             onClick={card.action}
           >
             <CardContent className="p-4">
-              <div className={`inline-flex p-2 rounded-lg ${card.bg} mb-3`}>
-                <card.icon className={`h-4 w-4 ${card.color}`} />
+              <div className="flex items-start justify-between mb-3">
+                <div className={`inline-flex p-2 rounded-lg ${card.bg}`}>
+                  <card.icon className={`h-4 w-4 ${card.color}`} />
+                </div>
+                {isStale && (
+                  <span
+                    className="text-xs font-medium text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded"
+                    title="Data may be outdated — server sync is overdue"
+                  >
+                    Stale
+                  </span>
+                )}
               </div>
               {isLoading ? (
                 <div className="h-7 w-12 bg-muted animate-pulse rounded mb-1" />
@@ -374,6 +409,13 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Uptime Sparkline — 24h poll outcome bar chart */}
+      <Card className="bg-card border-border">
+        <CardContent className="px-4 pt-3 pb-3">
+          <UptimeSparkline height={44} showLabel={true} />
+        </CardContent>
+      </Card>
 
       {/* Service Status Card — shown when degraded or down */}
       {(health.status === "degraded" || health.status === "down") && (

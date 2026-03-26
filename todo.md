@@ -277,3 +277,8 @@
 - [x] Last Synced timestamp: show in Dashboard header, updated by useHealthPolling on every successful refetch
 - [x] Sidebar network-status banner: persistent WifiOff banner at top of sidebar when retry state is "failed"
 - [x] 24h uptime in health badge: extend useHealthPolling to feed uptime % into Dashboard HealthBadge
+
+## Dashboard Visual Enhancements (2026-03-26)
+- [x] Uptime sparkline: 24h bar chart of green/red poll outcomes in Dashboard
+- [x] Recovery notification: notifyOwner push when server transitions failed → recovered
+- [x] Stale-data indicator: amber border + badge on stat cards when lastSyncedAt > 5 min old

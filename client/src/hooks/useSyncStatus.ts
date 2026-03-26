@@ -121,6 +121,22 @@ export interface SyncStatus {
 }
 
 /**
+ * usePollHistory
+ *
+ * Returns the raw poll history array (last 24 h) and re-renders on every new
+ * outcome. Used by UptimeSparkline to build the bar chart.
+ */
+export function usePollHistory(): PollEntry[] {
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const listener = () => forceUpdate((n) => n + 1);
+    _listeners.add(listener);
+    return () => { _listeners.delete(listener); };
+  }, []);
+  return _pollHistory.filter((e) => e.ts >= Date.now() - WINDOW_MS);
+}
+
+/**
  * useSyncStatus
  *
  * Returns the current sync metadata and re-renders whenever a new health

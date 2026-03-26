@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ReconnectToast } from "./components/ReconnectToast";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { useHealthPolling } from "./hooks/useHealthPolling";
+import { useRecoveryNotification } from "./hooks/useRecoveryNotification";
 import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Channels from "./pages/Channels";
@@ -44,9 +45,10 @@ function Router() {
   );
 }
 
-/** Mounts health-polling and reconnect toast — must be inside QueryClientProvider */
+/** Mounts health-polling, reconnect toast, and recovery notifications — must be inside QueryClientProvider */
 function AppInner() {
   useHealthPolling();
+  useRecoveryNotification();
   return (
     <>
       <Router />
