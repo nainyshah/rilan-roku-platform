@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, retryLink, TRPCClientError } from "@trpc/client";
+import { retryEvents } from "@/lib/retryEvents";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -53,12 +54,20 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 };
 
 queryClient.getQueryCache().subscribe(event => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    // Suppress transient network errors — they are retried automatically
-    if (!isTransientNetworkError(error)) {
-      console.error("[API Query Error]", error);
+  if (event.type === "updated") {
+    if (event.action.type === "error") {
+      const error = event.query.state.error;
+      redirectToLoginIfUnauthorized(error);
+      if (isTransientNetworkError(error)) {
+        // All retries exhausted — emit the failed event for UI feedback
+        retryEvents.emit({ type: 'failed' });
+      } else {
+        console.error("[API Query Error]", error);
+      }
+    }
+    // When a previously-failing query succeeds (e.g. after retry), emit recovered
+    if (event.action.type === "success" && event.query.state.fetchFailureCount > 0) {
+      retryEvents.emit({ type: 'recovered' });
     }
   }
 });
@@ -82,7 +91,12 @@ const trpcClient = trpc.createClient({
         if (attempts >= 4) return false; // max 3 retries (attempts 2, 3, 4)
         // Don't retry application-level 4xx errors
         if (error.data?.httpStatus && error.data.httpStatus < 500) return false;
-        return isTransientNetworkError(error);
+        if (isTransientNetworkError(error)) {
+          // Emit retrying event so the ReconnectToast can show attempt counter
+          retryEvents.emit({ type: 'retrying', attempt: attempts });
+          return true;
+        }
+        return false;
       },
       retryDelayMs: (attempt) => Math.min(1000 * 2 ** (attempt - 1), 10_000),
     }),

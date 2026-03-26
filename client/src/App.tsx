@@ -3,7 +3,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { ReconnectToast } from "./components/ReconnectToast";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { useHealthPolling } from "./hooks/useHealthPolling";
 import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Channels from "./pages/Channels";
@@ -42,13 +44,24 @@ function Router() {
   );
 }
 
+/** Mounts health-polling and reconnect toast — must be inside QueryClientProvider */
+function AppInner() {
+  useHealthPolling();
+  return (
+    <>
+      <Router />
+      <ReconnectToast />
+    </>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <AppInner />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

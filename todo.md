@@ -267,3 +267,8 @@
 ## AI Enhancements (2026-03-25 batch 5)
 - [x] Backend: ai.videoEnrichHistory tRPC query — return last enrichment job (date, confidence, jobId) per videoId
 - [x] Frontend: Videos table Sparkles button — tooltip showing "Last AI enriched: X days ago · Confidence: N%" (or "Never enriched" if no history)
+
+## Resilience Features (2026-03-26)
+- [x] ReconnectToast: toast notification shown during tRPC retry attempts with attempt counter and auto-dismiss on recovery
+- [x] GlobalErrorBoundary: upgrade ErrorBoundary to detect network exhaustion errors and show user-friendly "Unable to connect" UI with retry button
+- [x] useHealthPolling: window focus listener that calls /api/health and invalidates all stale queries when the tab is refocused after being hidden
