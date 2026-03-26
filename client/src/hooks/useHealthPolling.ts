@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { retryEvents } from '@/lib/retryEvents';
+import { recordSyncSuccess, recordSyncFailure } from '@/hooks/useSyncStatus';
 
 const HEALTH_URL = '/api/health';
 const FOCUS_STALE_THRESHOLD_MS = 30_000; // re-fetch only if tab was hidden ≥ 30 s
@@ -76,6 +77,9 @@ export function useHealthPolling() {
       if (healthy) {
         invalidateAllQueries();
         retryEvents.emit({ type: 'recovered' });
+        recordSyncSuccess();
+      } else {
+        recordSyncFailure();
       }
     };
 
@@ -88,6 +92,9 @@ export function useHealthPolling() {
         const healthy = await checkHealth();
         if (healthy) {
           retryEvents.emit({ type: 'recovered' });
+          recordSyncSuccess();
+        } else {
+          recordSyncFailure();
         }
       }, 60_000);
     };

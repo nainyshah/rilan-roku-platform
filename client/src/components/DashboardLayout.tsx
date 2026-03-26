@@ -42,12 +42,15 @@ import {
   Tv,
   Upload,
   Webhook,
+  WifiOff,
+  RefreshCw,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { useRetryStatus } from "@/hooks/useRetryStatus";
 
 const contentMenuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
@@ -73,6 +76,57 @@ const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 240;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 380;
+
+/**
+ * NetworkStatusBanner
+ *
+ * Renders a persistent red banner at the top of the sidebar when the
+ * global retry state is "failed" (all retries exhausted, server unreachable).
+ * Collapses to a compact icon-only version when the sidebar is collapsed.
+ * Automatically disappears when the connection is restored.
+ */
+function NetworkStatusBanner({ isCollapsed }: { isCollapsed: boolean }) {
+  const status = useRetryStatus();
+
+  if (status.state !== 'failed') return null;
+
+  return (
+    <div
+      className={[
+        'mx-2 mb-1 rounded-lg border border-red-500/30 bg-red-500/10',
+        isCollapsed ? 'p-1.5 flex justify-center' : 'px-3 py-2',
+      ].join(' ')}
+      role="alert"
+      aria-live="assertive"
+    >
+      {isCollapsed ? (
+        // Icon-only mode when sidebar is collapsed
+        <WifiOff
+          size={14}
+          className="text-red-400 shrink-0"
+          aria-label="Server unreachable"
+        />
+      ) : (
+        <div className="flex items-start gap-2">
+          <WifiOff size={13} className="text-red-400 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-red-400 leading-tight">
+              Server unreachable
+            </p>
+            <p className="text-xs text-red-400/70 leading-tight mt-0.5">
+              Retrying automatically…
+            </p>
+          </div>
+          <RefreshCw
+            size={11}
+            className="text-red-400/60 shrink-0 mt-0.5 animate-spin"
+            style={{ animationDuration: '2s' }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -203,6 +257,9 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0 py-2">
+            {/* ── Network-status banner — persists while connection is failed ── */}
+            <NetworkStatusBanner isCollapsed={isCollapsed} />
+
             <SidebarGroup>
               {!isCollapsed && (
                 <SidebarGroupLabel className="text-xs text-muted-foreground px-4 py-1">

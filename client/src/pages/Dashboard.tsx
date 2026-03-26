@@ -2,9 +2,10 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Film, Tv, CheckCircle, AlertTriangle, FileText, Clock, Radio, ArrowRight, Wifi, WifiOff, RefreshCw } from "lucide-react";
+import { Film, Tv, CheckCircle, AlertTriangle, FileText, Clock, Radio, ArrowRight, Wifi, WifiOff, RefreshCw, CloudOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { useState, useEffect, useCallback } from "react";
+import { useSyncStatus } from "@/hooks/useSyncStatus";
 
 // ─── Health check hook ────────────────────────────────────────────────────────
 type HealthStatus = "checking" | "ok" | "degraded" | "down";
@@ -219,10 +220,29 @@ function HealthBadge({ health, onRefresh }: { health: HealthState; onRefresh: ()
   );
 }
 
+/** Format a Date as a human-readable relative label. */
+function formatLastSynced(d: Date | null): string {
+  if (!d) return 'Never';
+  const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (diffSec < 10) return 'Just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { data: stats, isLoading } = trpc.dashboard.stats.useQuery();
   const { health, refresh: refreshHealth } = useHealthCheck(60_000);
+  const { lastSyncedAt, uptimePct: polledUptimePct, pollCount } = useSyncStatus();
+
+  // Tick every 30 s so the relative label ("2m ago") stays current
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const statCards = [
     {
@@ -291,8 +311,39 @@ export default function Dashboard() {
             RILAN Roku Content Platform — channel publishing overview
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <HealthBadge health={health} onRefresh={refreshHealth} />
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          {/* ── Last synced timestamp ── updated by useHealthPolling on every successful refetch */}
+          <div
+            className="flex items-center gap-1.5 text-xs"
+            title={lastSyncedAt ? `Last confirmed fresh: ${lastSyncedAt.toLocaleString()}` : 'No sync recorded yet'}
+          >
+            {!lastSyncedAt && (
+              <CloudOff className="h-3 w-3 text-amber-400 shrink-0" />
+            )}
+            <span className="hidden sm:inline text-muted-foreground">
+              {lastSyncedAt ? (
+                <>
+                  Synced{' '}
+                  <span className="font-medium text-foreground/80">{formatLastSynced(lastSyncedAt)}</span>
+                  {pollCount > 1 && (
+                    <span className="ml-1 text-muted-foreground/50">({pollCount} checks)</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-amber-400/80">Not yet synced</span>
+              )}
+            </span>
+          </div>
+
+          {/* ── Health badge — prefers polled uptime from useHealthPolling when available */}
+          <HealthBadge
+            health={{
+              ...health,
+              uptimePct: polledUptimePct !== null ? polledUptimePct : health.uptimePct,
+            }}
+            onRefresh={refreshHealth}
+          />
+
           <div className="flex items-center gap-2">
             <Radio className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium text-muted-foreground">RILAN GAMES LLC</span>

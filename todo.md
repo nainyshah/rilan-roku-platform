@@ -272,3 +272,8 @@
 - [x] ReconnectToast: toast notification shown during tRPC retry attempts with attempt counter and auto-dismiss on recovery
 - [x] GlobalErrorBoundary: upgrade ErrorBoundary to detect network exhaustion errors and show user-friendly "Unable to connect" UI with retry button
 - [x] useHealthPolling: window focus listener that calls /api/health and invalidates all stale queries when the tab is refocused after being hidden
+
+## Dashboard Resilience Enhancements (2026-03-26)
+- [x] Last Synced timestamp: show in Dashboard header, updated by useHealthPolling on every successful refetch
+- [x] Sidebar network-status banner: persistent WifiOff banner at top of sidebar when retry state is "failed"
+- [x] 24h uptime in health badge: extend useHealthPolling to feed uptime % into Dashboard HealthBadge
