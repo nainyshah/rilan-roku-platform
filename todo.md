@@ -343,3 +343,8 @@
 - [x] Remove vitePluginManusRuntime from vite.config.ts
 - [x] Update ENV registry to document new env vars and deprecate Forge vars
 - [x] Write self-hosted-modules.test.ts (18 tests: LLM x5, Storage x4, Notifications x4, Stubs x3, ENV x2)
+
+## Auth Follow-up Round 2 (2026-03-28)
+- [x] Harden admin seed: add mustChangePassword flag, log credentials once, force change on next login
+- [x] Add /users Administration group to DashboardLayout sidebar (admin-only, hidden from non-admins)
+- [x] Wire Resend email delivery into requestMagicLink procedure (replace console.log fallback)

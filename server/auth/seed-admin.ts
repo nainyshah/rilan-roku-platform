@@ -10,9 +10,13 @@
  * set a new password immediately after first login.
  *
  * Override via environment variables:
- *   ADMIN_SEED_EMAIL    — default: admin@rilan.local
+ *   ADMIN_SEED_EMAIL    — default: admin@rilan.com
  *   ADMIN_SEED_NAME     — default: Platform Admin
  *   ADMIN_SEED_PASSWORD — if set (≥6 chars), uses this instead of a random one
+ *                         Example: ADMIN_SEED_PASSWORD=Admin@2024!
+ *
+ * IMPORTANT: After first login, navigate to /change-password immediately
+ * to set a secure password and dismiss the expiry banner.
  */
 
 import { randomBytes } from "crypto";
@@ -21,7 +25,7 @@ import { users } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { hashPassword, PASSWORD_MIN_LENGTH } from "./helpers";
 
-const ADMIN_EMAIL = process.env.ADMIN_SEED_EMAIL ?? "admin@rilan.local";
+const ADMIN_EMAIL = process.env.ADMIN_SEED_EMAIL ?? "admin@rilan.com";
 const ADMIN_NAME  = process.env.ADMIN_SEED_NAME  ?? "Platform Admin";
 
 /** Generate a random 16-character alphanumeric + symbol password. */

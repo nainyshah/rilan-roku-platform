@@ -63,9 +63,21 @@ function MagicLinkCallback() {
   );
 }
 
-/** Protected route wrapper — redirects to /login if not authenticated */
+/** Protected route wrapper — redirects to /login if not authenticated, and to /change-password if mustChangePassword is set */
 function ProtectedRouter() {
   const { user, loading } = useAuth({ redirectOnUnauthenticated: true, redirectPath: "/login" });
+  const [location, navigate] = useLocation();
+
+  // Force password change before accessing any other page
+  useEffect(() => {
+    if (
+      user &&
+      (user as any).mustChangePassword &&
+      location !== "/change-password"
+    ) {
+      navigate("/change-password");
+    }
+  }, [user, location, navigate]);
 
   if (loading) {
     return (
