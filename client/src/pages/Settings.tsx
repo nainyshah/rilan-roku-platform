@@ -18,11 +18,15 @@ import { useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useStaleThreshold } from '@/hooks/useStaleThreshold';
 import { usePollInterval, POLL_INTERVAL_PRESETS } from '@/hooks/usePollInterval';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
+import { trpc } from '@/lib/trpc';
 import {
   Settings as SettingsIcon,
   Clock,
@@ -32,6 +36,8 @@ import {
   Info,
   Wifi,
   Zap,
+  KeyRound,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -135,10 +141,46 @@ export default function Settings() {
   // ── Health polling status ────────────────────────────────────────────────
   const { lastSyncedAt, uptimePct, pollCount } = useSyncStatus();
 
+  // ── Set-password for OAuth accounts ────────────────────────────────────────
+  const [newPwd, setNewPwd] = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [setPwdError, setSetPwdError] = useState('');
+  const utils = trpc.useUtils();
+
+  const setPasswordMutation = trpc.auth.setPassword.useMutation({
+    onSuccess: async () => {
+      await utils.auth.me.invalidate();
+      setNewPwd('');
+      setConfirmPwd('');
+      setSetPwdError('');
+      toast.success('Password set successfully. You can now log in with email + password.');
+    },
+    onError: (err) => setSetPwdError(err.message),
+  });
+
+  const handleSetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSetPwdError('');
+    if (newPwd !== confirmPwd) {
+      setSetPwdError('Passwords do not match.');
+      return;
+    }
+    setPasswordMutation.mutate({ newPassword: newPwd });
+  };
+
+  // Show the set-password card only for accounts with no password yet
+  // (loginMethod is 'google' or similar and passwordHash is absent from the safe projection)
+  // We detect this by checking if the user has no passwordHash via the me query
+  const meQuery = trpc.auth.me.useQuery();
+  const hasNoPassword = meQuery.data && !(meQuery.data as any).passwordHash;
+  // The safe projection doesn't expose passwordHash — we infer from loginMethod
+  const isOAuthOnly = meQuery.data && (meQuery.data as any).loginMethod &&
+    (meQuery.data as any).loginMethod !== 'password';
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* ── Page header ──────────────────────────────────────────────── */}
+        {/* ── Page header ──────────────────────────────────────────── */}
         <div className="flex items-center gap-3">
           <SettingsIcon className="h-6 w-6 text-primary" />
           <div>
@@ -437,6 +479,73 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ── Set Password (OAuth-only accounts) ──────────────────────────── */}
+        {isOAuthOnly && (
+          <Card className="border-border">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <KeyRound className="h-4 w-4 text-primary" />
+                Set a Password
+              </CardTitle>
+              <CardDescription>
+                Your account was created via Google OAuth and has no password yet. Setting one
+                lets you also sign in with email + password from any device.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSetPassword} className="space-y-4 max-w-sm">
+                {setPwdError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{setPwdError}</AlertDescription>
+                  </Alert>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="new-pwd">New password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="new-pwd"
+                      type="password"
+                      placeholder="••••••••"
+                      value={newPwd}
+                      onChange={(e) => setNewPwd(e.target.value)}
+                      className="pl-10"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-pwd">Confirm password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="confirm-pwd"
+                      type="password"
+                      placeholder="••••••••"
+                      value={confirmPwd}
+                      onChange={(e) => setConfirmPwd(e.target.value)}
+                      className="pl-10"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  className="gap-2"
+                  disabled={setPasswordMutation.isPending || !newPwd || !confirmPwd}
+                >
+                  {setPasswordMutation.isPending
+                    ? <span className="animate-spin mr-1">&#9696;</span>
+                    : <CheckCircle2 className="h-4 w-4" />}
+                  Set password
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );

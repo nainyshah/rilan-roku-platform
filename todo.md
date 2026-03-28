@@ -358,3 +358,8 @@
 
 ## Bug Fixes (2026-03-28)
 - [x] Fix "Invalid email or password" login error for seeded admin account — inserted admin@rilan.com with bcrypt hash of Admin@2024! directly (seed was skipped because shussnain.raza@gmail.com admin already existed)
+
+## Auth Polish Round 4 (2026-03-28)
+- [x] Fix login form email placeholder (admin@rilan.local → admin@rilan.com)
+- [x] Add auth.setPassword procedure + account settings UI for Google OAuth users with no passwordHash
+- [x] Wire user.login audit log entries into loginWithPassword and verifyMagicLink

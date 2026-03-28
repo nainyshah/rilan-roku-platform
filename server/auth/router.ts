@@ -124,6 +124,18 @@ export const customAuthRouter = router({
       // Update lastSignedIn
       await conn.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, user.id));
 
+      // Audit: password login
+      await writeAuditLog({
+        actorId:    user.id,
+        actorName:  user.name ?? user.email ?? undefined,
+        action:     "user.login",
+        targetType: "user",
+        targetId:   user.id,
+        targetName: user.email ?? undefined,
+        metadata:   { method: "password", totpUsed: !!(user.totpEnabled && input.totpToken) },
+        ipAddress:  ctx.req.ip,
+      }).catch(() => {/* non-fatal */});
+
       return { requireTotp: false, user: safeUser(user) };
     }),
 
@@ -332,6 +344,51 @@ export const customAuthRouter = router({
       return { success: true };
     }),
 
+  // ── setPassword (OAuth users with no passwordHash) ────────────────────────
+  setPassword: protectedProcedure
+    .input(
+      z.object({
+        newPassword: z.string().min(6, "Password must be at least 6 characters."),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const conn = await requireDb();
+      const [user] = await conn.select().from(users).where(eq(users.id, (ctx.user as any).id)).limit(1);
+      if (!user) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // Only allow if the account has no password yet (OAuth-only accounts)
+      if (user.passwordHash) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A password is already set. Use Change Password instead.",
+        });
+      }
+
+      const passwordError = validatePassword(input.newPassword);
+      if (passwordError) throw new TRPCError({ code: "BAD_REQUEST", message: passwordError });
+
+      const newHash = await hashPassword(input.newPassword);
+      await conn.update(users).set({
+        passwordHash: newHash,
+        passwordChangedAt: new Date(),
+        mustChangePassword: false,
+        loginMethod: "password", // allow password login going forward
+      }).where(eq(users.id, user.id));
+
+      await writeAuditLog({
+        actorId:    (ctx.user as any).id,
+        actorName:  (ctx.user as any).name ?? (ctx.user as any).email,
+        action:     "user.set_password",
+        targetType: "user",
+        targetId:   (ctx.user as any).id,
+        targetName: user.email ?? undefined,
+        metadata:   { previousLoginMethod: user.loginMethod },
+        ipAddress:  ctx.req.ip,
+      });
+
+      return { success: true };
+    }),
+
   // ── requestMagicLink ───────────────────────────────────────────────────────
   requestMagicLink: publicProcedure
     .input(z.object({
@@ -410,6 +467,18 @@ export const customAuthRouter = router({
 
       const cookieOpts = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, token, cookieOpts);
+
+      // Audit: magic-link login
+      await writeAuditLog({
+        actorId:    user.id,
+        actorName:  user.name ?? user.email ?? undefined,
+        action:     "user.login",
+        targetType: "user",
+        targetId:   user.id,
+        targetName: user.email ?? undefined,
+        metadata:   { method: "magic_link" },
+        ipAddress:  (ctx.req as any).ip,
+      }).catch(() => {/* non-fatal */});
 
       return { success: true, user: safeUser(user) };
     }),
