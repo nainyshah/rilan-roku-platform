@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { retryEvents } from '@/lib/retryEvents';
 import { recordSyncSuccess, recordSyncFailure } from '@/hooks/useSyncStatus';
+import { getPollIntervalMs, subscribePollInterval } from '@/hooks/usePollInterval';
 
 const HEALTH_URL = '/api/health';
 const FOCUS_STALE_THRESHOLD_MS = 30_000; // re-fetch only if tab was hidden ≥ 30 s
@@ -20,9 +21,10 @@ const HEALTH_TIMEOUT_MS = 8_000;
  *      c. Emits a `recovered` retry event so the ReconnectToast shows
  *         "Connection restored" if a previous failure had been displayed.
  *
- * 2. **Periodic background ping** — polls /api/health every 60 seconds
- *    while the tab is visible to detect server restarts early and keep
- *    the retry-event state accurate.
+ * 2. **Periodic background ping** — polls /api/health at the operator-
+ *    configured interval (default 60 s, range 10 s – 300 s, set via the
+ *    Settings page). The interval is live-reactive: changing it in Settings
+ *    restarts the timer immediately without a page reload.
  *
  * Latency (round-trip ms) is measured for every poll and forwarded to
  * recordSyncSuccess/recordSyncFailure so the SparklineDrillDown panel
@@ -32,9 +34,8 @@ const HEALTH_TIMEOUT_MS = 8_000;
  */
 export function useHealthPolling() {
   const queryClient = useQueryClient();
-  const hiddenAtRef = useRef<number | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isPollingRef = useRef(false);
+  const hiddenAtRef  = useRef<number | null>(null);
+  const intervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /**
    * Fetch /api/health and return { healthy, latencyMs }.
@@ -90,9 +91,16 @@ export function useHealthPolling() {
     };
 
     // ── Periodic background ping ───────────────────────────────────────────
+    // Starts (or restarts) the interval timer using the current poll interval.
+    // Called on mount and whenever the operator changes the interval in Settings.
     const startPolling = () => {
-      if (isPollingRef.current) return;
-      isPollingRef.current = true;
+      // Always clear any existing timer before starting a new one
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+
+      const currentIntervalMs = getPollIntervalMs();
       intervalRef.current = setInterval(async () => {
         if (document.visibilityState !== 'visible') return;
         const { healthy, latencyMs } = await checkHealth();
@@ -102,7 +110,7 @@ export function useHealthPolling() {
         } else {
           recordSyncFailure(latencyMs);
         }
-      }, 60_000);
+      }, currentIntervalMs);
     };
 
     const stopPolling = () => {
@@ -110,8 +118,13 @@ export function useHealthPolling() {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      isPollingRef.current = false;
     };
+
+    // Subscribe to interval changes so the timer restarts live when the
+    // operator adjusts the slider in Settings — no page reload required.
+    const unsubscribeInterval = subscribePollInterval(() => {
+      startPolling(); // clear old timer and start a new one with updated interval
+    });
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     startPolling();
@@ -119,6 +132,7 @@ export function useHealthPolling() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopPolling();
+      unsubscribeInterval();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryClient]);

@@ -287,3 +287,8 @@
 - [x] Sparkline drill-down: slide-over panel with raw poll timestamps and latency per 30-min bucket
 - [x] Configurable stale threshold: Settings page where operators set the stale-data warning boundary
 - [x] Notification counter badge: Dashboard header badge counting recovery notifications sent this session
+
+## Poll Interval Settings (2026-03-28)
+- [x] usePollInterval hook: singleton with localStorage persistence (10s–300s)
+- [x] Wire usePollInterval into useHealthPolling for live-reactive interval changes
+- [x] Settings page: poll-interval Slider card with presets and live preview

@@ -51,8 +51,9 @@ function buildBuckets(entries: PollEntry[], windowMs = 24 * 60 * 60 * 1000) {
 }
 
 describe('SparklineDrillDown — bucket helpers', () => {
-  const now = new Date('2026-03-26T12:00:00Z');
-  const t = (offsetMin: number) => new Date(now.getTime() + offsetMin * 60 * 1000);
+  // Use real Date.now() so entries fall within the 24h window regardless of when the test runs.
+  const now = new Date();
+  const t = (offsetMin: number) => new Date(now.getTime() - (100 - offsetMin) * 60 * 1000);
 
   const entries: PollEntry[] = [
     { timestamp: t(0),   success: true,  latencyMs: 120 },
