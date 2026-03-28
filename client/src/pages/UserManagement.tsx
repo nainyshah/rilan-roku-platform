@@ -1,0 +1,331 @@
+import { useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, UserPlus, Users, ShieldCheck, ShieldOff, ToggleLeft, ToggleRight, KeyRound } from "lucide-react";
+import DashboardLayout from "@/components/DashboardLayout";
+import { toast } from "sonner";
+
+type Role = "user" | "admin" | "content_manager" | "publishing_manager";
+
+const ROLE_LABELS: Record<Role, string> = {
+  admin: "Admin",
+  user: "User",
+  content_manager: "Content Manager",
+  publishing_manager: "Publishing Manager",
+};
+
+const ROLE_COLORS: Record<Role, string> = {
+  admin: "bg-red-500/10 text-red-600 border-red-500/20",
+  user: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+  content_manager: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+  publishing_manager: "bg-green-500/10 text-green-600 border-green-500/20",
+};
+
+export default function UserManagement() {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState<number | null>(null);
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newRole, setNewRole] = useState<Role>("user");
+  const [mustChange, setMustChange] = useState(true);
+  const [createError, setCreateError] = useState("");
+  const [newResetPassword, setNewResetPassword] = useState("");
+  const [resetError, setResetError] = useState("");
+
+  const utils = trpc.useUtils();
+
+  const listQuery = trpc.auth.listUsers.useQuery();
+
+  const createMutation = trpc.auth.register.useMutation({
+    onSuccess: async () => {
+      await utils.auth.listUsers.invalidate();
+      setCreateOpen(false);
+      setNewEmail(""); setNewName(""); setNewPassword(""); setNewRole("user"); setMustChange(true);
+      toast.success("User created successfully.");
+    },
+    onError: (err) => setCreateError(err.message),
+  });
+
+  const updateUserMutation = trpc.auth.updateUser.useMutation({
+    onSuccess: async () => {
+      await utils.auth.listUsers.invalidate();
+      toast.success("User updated.");
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
+  });
+
+  const resetPasswordMutation = trpc.auth.register.useMutation({
+    onSuccess: async () => {
+      await utils.auth.listUsers.invalidate();
+      setResetOpen(null);
+      setNewResetPassword("");
+      toast.success("Password reset successfully.");
+    },
+    onError: (err: { message: string }) => setResetError(err.message),
+  });
+
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError("");
+    createMutation.mutate({
+      email: newEmail,
+      name: newName,
+      password: newPassword,
+      role: newRole,
+      mustChangePassword: mustChange,
+    });
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6 p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Users className="w-6 h-6" />
+              User Management
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Create and manage platform users. Only admins can access this page.
+            </p>
+          </div>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="w-4 h-4 mr-2" />
+                New User
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Create New User</DialogTitle>
+                <DialogDescription>
+                  The user will receive their credentials and can change their password on first login.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4 py-2">
+                {createError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{createError}</AlertDescription>
+                  </Alert>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="new-name">Full Name</Label>
+                  <Input
+                    id="new-name"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Jane Smith"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-email">Email</Label>
+                  <Input
+                    id="new-email"
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="jane@rilan.local"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">Temporary Password</Label>
+                  <Input
+                    id="new-password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Min. 6 characters"
+                    minLength={6}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select value={newRole} onValueChange={(v) => setNewRole(v as Role)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(ROLE_LABELS) as [Role, string][]).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">Require password change</p>
+                    <p className="text-xs text-muted-foreground">User must set a new password on first login.</p>
+                  </div>
+                  <Switch checked={mustChange} onCheckedChange={setMustChange} />
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={createMutation.isPending}>
+                    {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Create User
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* User Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">All Users</CardTitle>
+            <CardDescription>
+              {listQuery.data?.length ?? 0} user{listQuery.data?.length !== 1 ? "s" : ""} registered
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {listQuery.isLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {listQuery.data?.map((user) => {
+                  const role = user.role as Role;
+                  const daysSincePwChange = user.passwordChangedAt
+                    ? Math.floor((Date.now() - new Date(user.passwordChangedAt).getTime()) / 86_400_000)
+                    : null;
+                  const passwordExpiringSoon = daysSincePwChange !== null && daysSincePwChange >= 75;
+                  const passwordExpired = daysSincePwChange !== null && daysSincePwChange >= 90;
+
+                  return (
+                    <div
+                      key={user.id}
+                      className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                        !user.isActive ? "opacity-50 bg-muted/30" : "bg-card hover:bg-muted/20"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                          <span className="text-sm font-semibold text-primary">
+                            {(user.name || user.email || "?")[0].toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm truncate">{user.name || "—"}</span>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${ROLE_COLORS[role] ?? ""}`}>
+                              {ROLE_LABELS[role] ?? role}
+                            </span>
+                            {user.totpEnabled && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/20">
+                                <ShieldCheck className="w-3 h-3" /> 2FA
+                              </span>
+                            )}
+                            {user.mustChangePassword && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/10 text-orange-600 border border-orange-500/20">
+                                Must change password
+                              </span>
+                            )}
+                            {passwordExpired && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-600 border border-red-500/20">
+                                Password expired
+                              </span>
+                            )}
+                            {!passwordExpired && passwordExpiringSoon && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-600 border border-yellow-500/20">
+                                Password expiring soon
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        {/* Reset Password */}
+                        <Dialog open={resetOpen === user.id} onOpenChange={(o) => { setResetOpen(o ? user.id : null); setNewResetPassword(""); setResetError(""); }}>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="icon" title="Reset password">
+                              <KeyRound className="w-4 h-4" />
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-sm">
+                            <DialogHeader>
+                              <DialogTitle>Reset Password</DialogTitle>
+                              <DialogDescription>Set a new temporary password for {user.name || user.email}.</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-3 py-2">
+                              {resetError && <Alert variant="destructive"><AlertDescription>{resetError}</AlertDescription></Alert>}
+                              <div className="space-y-2">
+                                <Label>New Password</Label>
+                                <Input
+                                  type="password"
+                                  value={newResetPassword}
+                                  onChange={(e) => setNewResetPassword(e.target.value)}
+                                  placeholder="Min. 6 characters"
+                                  minLength={6}
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setResetOpen(null)}>Cancel</Button>
+                              <Button
+                                disabled={resetPasswordMutation.isPending || newResetPassword.length < 6}
+                                onClick={() => resetPasswordMutation.mutate({ email: user.email!, name: user.name!, password: newResetPassword, role: user.role as Role, mustChangePassword: true })}
+                              >
+                                {resetPasswordMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                Reset
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+
+                        {/* Toggle Active */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={user.isActive ? "Deactivate user" : "Activate user"}
+                          onClick={() => updateUserMutation.mutate({ userId: user.id, isActive: !user.isActive })}
+                          disabled={updateUserMutation.isPending}
+                        >
+                          {user.isActive
+                            ? <ToggleRight className="w-4 h-4 text-green-500" />
+                            : <ToggleLeft className="w-4 h-4 text-muted-foreground" />
+                          }
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
+  );
+}

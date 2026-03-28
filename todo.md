@@ -292,3 +292,16 @@
 - [x] usePollInterval hook: singleton with localStorage persistence (10s–300s)
 - [x] Wire usePollInterval into useHealthPolling for live-reactive interval changes
 - [x] Settings page: poll-interval Slider card with presets and live preview
+
+## Custom Authentication System (2026-03-28)
+- [x] DB schema: add password_hash, totp_secret, magic_link_token, password_changed_at columns
+- [x] Auth helpers: bcrypt password hashing, JWT sign/verify, TOTP (otplib), magic-link token
+- [x] tRPC auth router: login, logout, me, register (admin-only), change-password, request-magic-link, verify-magic-link, setup-totp, verify-totp, disable-totp
+- [x] Admin seed script: seed initial admin user on server startup
+- [x] Login page: email/password + TOTP 2FA step + magic-link tab
+- [x] Change Password page with strength validation
+- [x] Setup TOTP page with QR code and backup codes
+- [x] User Management page (admin-only): create, list, update, reset password
+- [x] PasswordExpiryBanner: 90-day expiry alert with days-remaining countdown
+- [x] Replace all Manus OAuth references in App.tsx, DashboardLayout, const.ts
+- [x] Vitest tests: 33 new tests for all auth helpers and logic

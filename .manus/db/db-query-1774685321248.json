@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `users` ADD `passwordHash` varchar(255);\nALTER TABLE `users` ADD `passwordChangedAt` timestamp;\nALTER TABLE `users` ADD `totpSecret` varchar(64);\nALTER TABLE `users` ADD `totpEnabled` boolean DEFAULT false NOT NULL;\nALTER TABLE `users` ADD `magicLinkToken` varchar(64);\nALTER TABLE `users` ADD `magicLinkExpiresAt` timestamp;\nALTER TABLE `users` ADD `mustChangePassword` boolean DEFAULT false NOT NULL;\nALTER TABLE `users` ADD `isActive` boolean DEFAULT true NOT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3otSeZLaG2g6mhr.root --database NAe7NGE4cjeEx46c5Rofwa --execute ALTER TABLE `users` ADD `passwordHash` varchar(255);\nALTER TABLE `users` ADD `passwordChangedAt` timestamp;\nALTER TABLE `users` ADD `totpSecret` varchar(64);\nALTER TABLE `users` ADD `totpEnabled` boolean DEFAULT false NOT NULL;\nALTER TABLE `users` ADD `magicLinkToken` varchar(64);\nALTER TABLE `users` ADD `magicLinkExpiresAt` timestamp;\nALTER TABLE `users` ADD `mustChangePassword` boolean DEFAULT false NOT NULL;\nALTER TABLE `users` ADD `isActive` boolean DEFAULT true NOT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 5673
+}

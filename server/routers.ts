@@ -49,8 +49,7 @@ import {
   invalidateFeedCache,
   purgeAllFeedCache,
 } from "./feedCache";
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
+import { customAuthRouter } from "./auth/router";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { ENV } from "./_core/env";
@@ -74,15 +73,8 @@ function slugify(str: string): string {
 export const appRouter = router({
   system: systemRouter,
 
-  // ─── Auth ──────────────────────────────────────────────────────────────────
-  auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
-    }),
-  }),
+  // ─── Auth (custom JWT) ─────────────────────────────────────────────────────
+  auth: customAuthRouter,
 
   // ─── Dashboard ─────────────────────────────────────────────────────────────
   dashboard: router({

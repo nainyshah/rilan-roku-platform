@@ -3,7 +3,7 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
+import { seedAdminUser } from "../auth/seed-admin";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -205,8 +205,8 @@ async function startServer() {
     }
   });
 
-  // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
+  // Seed the initial admin user if none exists yet
+  await seedAdminUser();
   // tRPC API
   app.use(
     "/api/trpc",

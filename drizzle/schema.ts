@@ -18,6 +18,23 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin", "content_manager", "publishing_manager"]).default("user").notNull(),
+  // ── Custom auth fields ────────────────────────────────────────────────────
+  /** bcrypt hash of the user password. NULL = OAuth-only or not yet set. */
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  /** UTC timestamp of the last password change — used for 90-day expiry alerts. */
+  passwordChangedAt: timestamp("passwordChangedAt"),
+  /** base32 TOTP secret (otplib). NULL = 2FA not enabled. */
+  totpSecret: varchar("totpSecret", { length: 64 }),
+  /** Whether TOTP 2FA is fully verified and active. */
+  totpEnabled: boolean("totpEnabled").default(false).notNull(),
+  /** Single-use magic-link token (SHA-256 hex). */
+  magicLinkToken: varchar("magicLinkToken", { length: 64 }),
+  /** Expiry for the magic-link token. */
+  magicLinkExpiresAt: timestamp("magicLinkExpiresAt"),
+  /** Whether the user must change their password on next login (admin-set). */
+  mustChangePassword: boolean("mustChangePassword").default(false).notNull(),
+  /** Whether this account is active. Admins can disable accounts. */
+  isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
