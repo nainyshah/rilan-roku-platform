@@ -1,0 +1,20 @@
+{
+  "query": "SELECT id, email, name, role, isActive, mustChangePassword, loginMethod, CASE WHEN passwordHash IS NOT NULL THEN 'SET' ELSE 'NULL' END AS password_hash_status FROM users WHERE email = 'admin@rilan.com';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3otSeZLaG2g6mhr.root --database NAe7NGE4cjeEx46c5Rofwa --execute SELECT id, email, name, role, isActive, mustChangePassword, loginMethod, CASE WHEN passwordHash IS NOT NULL THEN 'SET' ELSE 'NULL' END AS password_hash_status FROM users WHERE email = 'admin@rilan.com';",
+  "rows": [
+    {
+      "id": "1680001",
+      "email": "admin@rilan.com",
+      "name": "Platform Admin",
+      "role": "admin",
+      "isActive": "1",
+      "mustChangePassword": "1",
+      "loginMethod": "password",
+      "password_hash_status": "SET"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tname\trole\tisActive\tmustChangePassword\tloginMethod\tpassword_hash_status\n1680001\tadmin@rilan.com\tPlatform Admin\tadmin\t1\t1\tpassword\tSET\n",
+  "stderr": "",
+  "execution_time_ms": 1620
+}

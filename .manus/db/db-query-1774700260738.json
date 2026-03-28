@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO users (openId, email, name, role, loginMethod, passwordHash, passwordChangedAt, mustChangePassword, isActive, totpEnabled, lastSignedIn, createdAt, updatedAt)\nVALUES (\n  'local_admin_handoff',\n  'admin@rilan.com',\n  'Platform Admin',\n  'admin',\n  'password',\n  '$2b$12$N38Ff.AvSfOm3uZ56fhNPOEY8xbOvEw7jbTHYSgkwDLraufRwIkJq',\n  NULL,\n  1,\n  1,\n  0,\n  NOW(),\n  NOW(),\n  NOW()\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3otSeZLaG2g6mhr.root --database NAe7NGE4cjeEx46c5Rofwa --execute INSERT INTO users (openId, email, name, role, loginMethod, passwordHash, passwordChangedAt, mustChangePassword, isActive, totpEnabled, lastSignedIn, createdAt, updatedAt)\nVALUES (\n  'local_admin_handoff',\n  'admin@rilan.com',\n  'Platform Admin',\n  'admin',\n  'password',\n  '$2b$12$N38Ff.AvSfOm3uZ56fhNPOEY8xbOvEw7jbTHYSgkwDLraufRwIkJq',\n  NULL,\n  1,\n  1,\n  0,\n  NOW(),\n  NOW(),\n  NOW()\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1588
+}

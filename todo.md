@@ -355,3 +355,6 @@
 - [x] Create admin_audit_log table (schema + migration + DB helper)
 - [x] Wire audit logging into updateUser, deleteUser, register, changePassword procedures
 - [x] Add audit log viewer UI for admins (in UserManagement page or dedicated /audit page)
+
+## Bug Fixes (2026-03-28)
+- [x] Fix "Invalid email or password" login error for seeded admin account — inserted admin@rilan.com with bcrypt hash of Admin@2024! directly (seed was skipped because shussnain.raza@gmail.com admin already existed)

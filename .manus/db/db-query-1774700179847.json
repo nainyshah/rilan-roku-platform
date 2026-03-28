@@ -1,0 +1,21 @@
+{
+  "query": "SELECT id, email, name, role, isActive, mustChangePassword, loginMethod, CASE WHEN passwordHash IS NOT NULL THEN 'SET' ELSE 'NULL' END AS password_hash_status, createdAt FROM users WHERE role = 'admin' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3otSeZLaG2g6mhr.root --database NAe7NGE4cjeEx46c5Rofwa --execute SELECT id, email, name, role, isActive, mustChangePassword, loginMethod, CASE WHEN passwordHash IS NOT NULL THEN 'SET' ELSE 'NULL' END AS password_hash_status, createdAt FROM users WHERE role = 'admin' LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "email": "shussnain.raza@gmail.com",
+      "name": "Syed Raza",
+      "role": "admin",
+      "isActive": "1",
+      "mustChangePassword": "0",
+      "loginMethod": "google",
+      "password_hash_status": "NULL",
+      "createdAt": "2026-03-12 03:24:32"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tname\trole\tisActive\tmustChangePassword\tloginMethod\tpassword_hash_status\tcreatedAt\n1\tshussnain.raza@gmail.com\tSyed Raza\tadmin\t1\t0\tgoogle\tNULL\t2026-03-12 03:24:32\n",
+  "stderr": "",
+  "execution_time_ms": 1741
+}
