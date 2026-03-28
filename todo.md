@@ -348,3 +348,10 @@
 - [x] Harden admin seed: add mustChangePassword flag, log credentials once, force change on next login
 - [x] Add /users Administration group to DashboardLayout sidebar (admin-only, hidden from non-admins)
 - [x] Wire Resend email delivery into requestMagicLink procedure (replace console.log fallback)
+
+## Auth & Admin Round 3 (2026-03-28)
+- [x] Set ADMIN_SEED_PASSWORD deployment secret
+- [x] Add "Change Password" link to sidebar footer dropdown
+- [x] Create admin_audit_log table (schema + migration + DB helper)
+- [x] Wire audit logging into updateUser, deleteUser, register, changePassword procedures
+- [x] Add audit log viewer UI for admins (in UserManagement page or dedicated /audit page)

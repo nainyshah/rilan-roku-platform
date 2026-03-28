@@ -53,6 +53,7 @@ import { customAuthRouter } from "./auth/router";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { ENV } from "./_core/env";
+import { listAuditLog } from "./auditLog";
 
 // ─── Role helpers ─────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -746,10 +747,34 @@ export const appRouter = router({
     }),
   }),
 
-    // ─── Webhooks ──────────────────────────────────────────────
+  // ─── Webhooks ──────────────────────────────────────────────
   webhooks: webhooksRouter,
-  // ─── AI ────────────────────────────────────────────────────────
+  // ─── AI ───────────────────────────────────────────────────────────
   ai: aiRouter,
+
+  // ─── Admin Audit Log ────────────────────────────────────────
+  auditLog: router({
+    list: protectedProcedure
+      .use(({ ctx, next }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required." });
+        }
+        return next({ ctx });
+      })
+      .input(
+        z.object({
+          actorId:  z.number().optional(),
+          targetId: z.number().optional(),
+          action:   z.string().optional(),
+          since:    z.date().optional(),
+          limit:    z.number().min(1).max(500).default(100),
+          offset:   z.number().min(0).default(0),
+        }).optional()
+      )
+      .query(async ({ input }) => {
+        return listAuditLog(input ?? {});
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

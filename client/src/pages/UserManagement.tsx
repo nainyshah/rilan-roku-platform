@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, UserPlus, Users, ShieldCheck, ShieldOff, ToggleLeft, ToggleRight, KeyRound } from "lucide-react";
+import {
+  Loader2,
+  UserPlus,
+  Users,
+  ShieldCheck,
+  ShieldOff,
+  ToggleLeft,
+  ToggleRight,
+  KeyRound,
+  ClipboardList,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { toast } from "sonner";
 
@@ -43,6 +56,144 @@ const ROLE_COLORS: Record<Role, string> = {
   publishing_manager: "bg-green-500/10 text-green-600 border-green-500/20",
 };
 
+const ACTION_LABELS: Record<string, { label: string; color: string }> = {
+  "user.create":          { label: "Created",          color: "bg-green-500/10 text-green-600 border-green-500/20" },
+  "user.update":          { label: "Updated",          color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  "user.deactivate":      { label: "Deactivated",      color: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
+  "user.change_password": { label: "Password Changed", color: "bg-purple-500/10 text-purple-600 border-purple-500/20" },
+};
+
+const AUDIT_PAGE_SIZE = 20;
+
+// ─── Audit Log Tab ────────────────────────────────────────────────────────────
+function AuditLogTab() {
+  const [offset, setOffset] = useState(0);
+
+  const auditQuery = trpc.auditLog.list.useQuery(
+    { limit: AUDIT_PAGE_SIZE, offset },
+    { keepPreviousData: true } as any
+  );
+
+  const entries = auditQuery.data?.entries ?? [];
+  const hasMore = entries.length === AUDIT_PAGE_SIZE;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <ClipboardList className="w-4 h-4" />
+          Admin Audit Log
+        </CardTitle>
+        <CardDescription>
+          A chronological record of all admin-initiated actions on this platform.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {auditQuery.isLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">No audit log entries yet.</p>
+            <p className="text-xs mt-1 opacity-70">
+              Actions such as creating, updating, or deactivating users will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-0 divide-y divide-border">
+            {entries.map((entry) => {
+              const actionMeta = ACTION_LABELS[entry.action] ?? {
+                label: entry.action,
+                color: "bg-zinc-500/10 text-zinc-600 border-zinc-500/20",
+              };
+              return (
+                <div key={entry.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${actionMeta.color}`}
+                      >
+                        {actionMeta.label}
+                      </span>
+                      {entry.targetName && (
+                        <span className="text-sm font-medium truncate">{entry.targetName}</span>
+                      )}
+                      {entry.targetType && (
+                        <span className="text-xs text-muted-foreground">({entry.targetType})</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      by{" "}
+                      <span className="font-medium text-foreground">
+                        {entry.actorName ?? `User #${entry.actorId}`}
+                      </span>
+                      {entry.ipAddress && (
+                        <> &middot; <span className="font-mono">{entry.ipAddress}</span></>
+                      )}
+                    </p>
+                    {Boolean(entry.metadata && Object.keys(entry.metadata as Record<string, unknown>).length > 0) && (
+                      <details className="mt-1">
+                        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none">
+                          View details
+                        </summary>
+                        <pre className="mt-1 text-xs bg-muted/50 rounded p-2 overflow-x-auto text-muted-foreground">
+                          {JSON.stringify(entry.metadata as Record<string, unknown>, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                  <time
+                    className="text-xs text-muted-foreground shrink-0 tabular-nums"
+                    dateTime={new Date(entry.createdAt).toISOString()}
+                    title={new Date(entry.createdAt).toLocaleString()}
+                  >
+                    {new Date(entry.createdAt).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {(offset > 0 || hasMore) && (
+          <div className="flex items-center justify-between pt-4 mt-4 border-t border-border">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOffset(Math.max(0, offset - AUDIT_PAGE_SIZE))}
+              disabled={offset === 0 || auditQuery.isFetching}
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Previous
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Showing {offset + 1}–{offset + entries.length}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOffset(offset + AUDIT_PAGE_SIZE)}
+              disabled={!hasMore || auditQuery.isFetching}
+            >
+              Next
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function UserManagement() {
   const [createOpen, setCreateOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState<number | null>(null);
@@ -62,6 +213,7 @@ export default function UserManagement() {
   const createMutation = trpc.auth.register.useMutation({
     onSuccess: async () => {
       await utils.auth.listUsers.invalidate();
+      await utils.auditLog.list.invalidate();
       setCreateOpen(false);
       setNewEmail(""); setNewName(""); setNewPassword(""); setNewRole("user"); setMustChange(true);
       toast.success("User created successfully.");
@@ -72,6 +224,7 @@ export default function UserManagement() {
   const updateUserMutation = trpc.auth.updateUser.useMutation({
     onSuccess: async () => {
       await utils.auth.listUsers.invalidate();
+      await utils.auditLog.list.invalidate();
       toast.success("User updated.");
     },
     onError: (err: { message: string }) => toast.error(err.message),
@@ -150,7 +303,7 @@ export default function UserManagement() {
                     type="email"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="jane@rilan.local"
+                    placeholder="jane@rilan.com"
                     required
                   />
                 </div>
@@ -198,133 +351,159 @@ export default function UserManagement() {
           </Dialog>
         </div>
 
-        {/* User Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">All Users</CardTitle>
-            <CardDescription>
-              {listQuery.data?.length ?? 0} user{listQuery.data?.length !== 1 ? "s" : ""} registered
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {listQuery.isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {listQuery.data?.map((user) => {
-                  const role = user.role as Role;
-                  const daysSincePwChange = user.passwordChangedAt
-                    ? Math.floor((Date.now() - new Date(user.passwordChangedAt).getTime()) / 86_400_000)
-                    : null;
-                  const passwordExpiringSoon = daysSincePwChange !== null && daysSincePwChange >= 75;
-                  const passwordExpired = daysSincePwChange !== null && daysSincePwChange >= 90;
+        {/* Tabs: Users | Audit Log */}
+        <Tabs defaultValue="users">
+          <TabsList>
+            <TabsTrigger value="users" className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" />
+              Users
+              {listQuery.data && (
+                <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0 h-4">
+                  {listQuery.data.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="flex items-center gap-1.5">
+              <ClipboardList className="w-3.5 h-3.5" />
+              Audit Log
+            </TabsTrigger>
+          </TabsList>
 
-                  return (
-                    <div
-                      key={user.id}
-                      className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                        !user.isActive ? "opacity-50 bg-muted/30" : "bg-card hover:bg-muted/20"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                          <span className="text-sm font-semibold text-primary">
-                            {(user.name || user.email || "?")[0].toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-sm truncate">{user.name || "—"}</span>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${ROLE_COLORS[role] ?? ""}`}>
-                              {ROLE_LABELS[role] ?? role}
-                            </span>
-                            {user.totpEnabled && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/20">
-                                <ShieldCheck className="w-3 h-3" /> 2FA
-                              </span>
-                            )}
-                            {user.mustChangePassword && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/10 text-orange-600 border border-orange-500/20">
-                                Must change password
-                              </span>
-                            )}
-                            {passwordExpired && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-600 border border-red-500/20">
-                                Password expired
-                              </span>
-                            )}
-                            {!passwordExpired && passwordExpiringSoon && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-600 border border-yellow-500/20">
-                                Password expiring soon
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
-                        </div>
-                      </div>
+          {/* ── Users tab ── */}
+          <TabsContent value="users" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">All Users</CardTitle>
+                <CardDescription>
+                  {listQuery.data?.length ?? 0} user{listQuery.data?.length !== 1 ? "s" : ""} registered
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {listQuery.isLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {listQuery.data?.map((user) => {
+                      const role = user.role as Role;
+                      const daysSincePwChange = user.passwordChangedAt
+                        ? Math.floor((Date.now() - new Date(user.passwordChangedAt).getTime()) / 86_400_000)
+                        : null;
+                      const passwordExpiringSoon = daysSincePwChange !== null && daysSincePwChange >= 75;
+                      const passwordExpired = daysSincePwChange !== null && daysSincePwChange >= 90;
 
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        {/* Reset Password */}
-                        <Dialog open={resetOpen === user.id} onOpenChange={(o) => { setResetOpen(o ? user.id : null); setNewResetPassword(""); setResetError(""); }}>
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="icon" title="Reset password">
-                              <KeyRound className="w-4 h-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-sm">
-                            <DialogHeader>
-                              <DialogTitle>Reset Password</DialogTitle>
-                              <DialogDescription>Set a new temporary password for {user.name || user.email}.</DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-3 py-2">
-                              {resetError && <Alert variant="destructive"><AlertDescription>{resetError}</AlertDescription></Alert>}
-                              <div className="space-y-2">
-                                <Label>New Password</Label>
-                                <Input
-                                  type="password"
-                                  value={newResetPassword}
-                                  onChange={(e) => setNewResetPassword(e.target.value)}
-                                  placeholder="Min. 6 characters"
-                                  minLength={6}
-                                />
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => setResetOpen(null)}>Cancel</Button>
-                              <Button
-                                disabled={resetPasswordMutation.isPending || newResetPassword.length < 6}
-                                onClick={() => resetPasswordMutation.mutate({ email: user.email!, name: user.name!, password: newResetPassword, role: user.role as Role, mustChangePassword: true })}
-                              >
-                                {resetPasswordMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                Reset
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-
-                        {/* Toggle Active */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title={user.isActive ? "Deactivate user" : "Activate user"}
-                          onClick={() => updateUserMutation.mutate({ userId: user.id, isActive: !user.isActive })}
-                          disabled={updateUserMutation.isPending}
+                      return (
+                        <div
+                          key={user.id}
+                          className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                            !user.isActive ? "opacity-50 bg-muted/30" : "bg-card hover:bg-muted/20"
+                          }`}
                         >
-                          {user.isActive
-                            ? <ToggleRight className="w-4 h-4 text-green-500" />
-                            : <ToggleLeft className="w-4 h-4 text-muted-foreground" />
-                          }
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                              <span className="text-sm font-semibold text-primary">
+                                {(user.name || user.email || "?")[0].toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm truncate">{user.name || "—"}</span>
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${ROLE_COLORS[role] ?? ""}`}>
+                                  {ROLE_LABELS[role] ?? role}
+                                </span>
+                                {user.totpEnabled && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/20">
+                                    <ShieldCheck className="w-3 h-3" /> 2FA
+                                  </span>
+                                )}
+                                {user.mustChangePassword && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-500/10 text-orange-600 border border-orange-500/20">
+                                    Must change password
+                                  </span>
+                                )}
+                                {passwordExpired && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-600 border border-red-500/20">
+                                    Password expired
+                                  </span>
+                                )}
+                                {!passwordExpired && passwordExpiringSoon && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/10 text-yellow-600 border border-yellow-500/20">
+                                    Password expiring soon
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {/* Reset Password */}
+                            <Dialog open={resetOpen === user.id} onOpenChange={(o) => { setResetOpen(o ? user.id : null); setNewResetPassword(""); setResetError(""); }}>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="icon" title="Reset password">
+                                  <KeyRound className="w-4 h-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-sm">
+                                <DialogHeader>
+                                  <DialogTitle>Reset Password</DialogTitle>
+                                  <DialogDescription>Set a new temporary password for {user.name || user.email}.</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-3 py-2">
+                                  {resetError && <Alert variant="destructive"><AlertDescription>{resetError}</AlertDescription></Alert>}
+                                  <div className="space-y-2">
+                                    <Label>New Password</Label>
+                                    <Input
+                                      type="password"
+                                      value={newResetPassword}
+                                      onChange={(e) => setNewResetPassword(e.target.value)}
+                                      placeholder="Min. 6 characters"
+                                      minLength={6}
+                                    />
+                                  </div>
+                                </div>
+                                <DialogFooter>
+                                  <Button variant="outline" onClick={() => setResetOpen(null)}>Cancel</Button>
+                                  <Button
+                                    disabled={resetPasswordMutation.isPending || newResetPassword.length < 6}
+                                    onClick={() => resetPasswordMutation.mutate({ email: user.email!, name: user.name!, password: newResetPassword, role: user.role as Role, mustChangePassword: true })}
+                                  >
+                                    {resetPasswordMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                    Reset
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+
+                            {/* Toggle Active */}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title={user.isActive ? "Deactivate user" : "Activate user"}
+                              onClick={() => updateUserMutation.mutate({ userId: user.id, isActive: !user.isActive })}
+                              disabled={updateUserMutation.isPending}
+                            >
+                              {user.isActive
+                                ? <ToggleRight className="w-4 h-4 text-green-500" />
+                                : <ToggleLeft className="w-4 h-4 text-muted-foreground" />
+                              }
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Audit Log tab ── */}
+          <TabsContent value="audit" className="mt-4">
+            <AuditLogTab />
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

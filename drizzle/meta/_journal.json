@@ -43,6 +43,13 @@
       "when": 1774685302652,
       "tag": "0005_small_mystique",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1774698709906,
+      "tag": "0006_abnormal_arachne",
+      "breakpoints": true
     }
   ]
 }

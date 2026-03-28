@@ -31,6 +31,7 @@ import {
   FolderOpen,
   History as HistoryIcon,
   Image,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   PanelLeft,
@@ -409,6 +410,14 @@ function DashboardLayoutContent({
                     {user?.role}
                   </span>
                 </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setLocation("/change-password")}
+                  className="cursor-pointer"
+                >
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  <span>Change Password</span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />

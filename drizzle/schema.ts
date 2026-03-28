@@ -268,3 +268,31 @@ export const aiJobs = mysqlTable("ai_jobs", {
 
 export type AiJob = typeof aiJobs.$inferSelect;
 export type InsertAiJob = typeof aiJobs.$inferInsert;
+
+// ─── Admin Audit Log ──────────────────────────────────────────────────────────
+/**
+ * Records every admin-initiated action for compliance and debugging.
+ *
+ * actorId    — the admin who performed the action (NULL = system/seed)
+ * action     — machine-readable action name, e.g. "user.create"
+ * targetType — the resource type affected, e.g. "user"
+ * targetId   — the numeric ID of the affected resource (nullable)
+ * targetName — human-readable label at the time of the action (e.g. email)
+ * metadata   — arbitrary JSON with before/after values or extra context
+ * ipAddress  — request IP (best-effort, may be absent for server-side calls)
+ */
+export const adminAuditLog = mysqlTable("admin_audit_log", {
+  id: int("id").autoincrement().primaryKey(),
+  actorId: int("actorId"),
+  actorName: varchar("actorName", { length: 255 }),
+  action: varchar("action", { length: 128 }).notNull(),
+  targetType: varchar("targetType", { length: 64 }),
+  targetId: int("targetId"),
+  targetName: varchar("targetName", { length: 320 }),
+  metadata: json("metadata"),
+  ipAddress: varchar("ipAddress", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
+export type InsertAdminAuditLog = typeof adminAuditLog.$inferInsert;

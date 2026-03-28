@@ -44,6 +44,7 @@ import {
   COOKIE_NAME,
 } from "./helpers";
 import QRCode from "qrcode";
+import { writeAuditLog } from "../auditLog.js";
 // ─── Helper: get raw drizzle connection (throws if DB unavailable) ──────────
 async function requireDb() {
   const conn = await getDb();
@@ -158,7 +159,7 @@ export const customAuthRouter = router({
         mustChangePassword: z.boolean().default(true),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await requireDb();
 
       // Check for duplicate email
@@ -188,6 +189,18 @@ export const customAuthRouter = router({
       });
 
       const [created] = await conn.select().from(users).where(eq(users.email, input.email)).limit(1);
+
+      await writeAuditLog({
+        actorId:    (ctx.user as any).id,
+        actorName:  (ctx.user as any).name ?? (ctx.user as any).email,
+        action:     "user.create",
+        targetType: "user",
+        targetId:   created!.id,
+        targetName: created!.email ?? undefined,
+        metadata:   { role: input.role, mustChangePassword: input.mustChangePassword },
+        ipAddress:  ctx.req.ip,
+      });
+
       return { success: true, user: safeUser(created!) };
     }),
 
@@ -209,7 +222,7 @@ export const customAuthRouter = router({
         mustChangePassword: z.boolean().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await requireDb();
       const updates: Partial<typeof users.$inferInsert> = {};
       if (input.name !== undefined) updates.name = input.name;
@@ -217,20 +230,61 @@ export const customAuthRouter = router({
       if (input.isActive !== undefined) updates.isActive = input.isActive;
       if (input.mustChangePassword !== undefined) updates.mustChangePassword = input.mustChangePassword;
 
+      // Capture before-state for audit metadata
+      const [before] = await conn.select().from(users).where(eq(users.id, input.userId)).limit(1);
+
       await conn.update(users).set(updates).where(eq(users.id, input.userId));
       const [updated] = await conn.select().from(users).where(eq(users.id, input.userId)).limit(1);
+
+      await writeAuditLog({
+        actorId:    (ctx.user as any).id,
+        actorName:  (ctx.user as any).name ?? (ctx.user as any).email,
+        action:     "user.update",
+        targetType: "user",
+        targetId:   input.userId,
+        targetName: updated?.email ?? undefined,
+        metadata:   {
+          before: {
+            name:               before?.name,
+            role:               before?.role,
+            isActive:           before?.isActive,
+            mustChangePassword: before?.mustChangePassword,
+          },
+          after: {
+            name:               input.name,
+            role:               input.role,
+            isActive:           input.isActive,
+            mustChangePassword: input.mustChangePassword,
+          },
+        },
+        ipAddress: ctx.req.ip,
+      });
+
       return { success: true, user: safeUser(updated!) };
     }),
 
   // ── deleteUser (admin-only — soft delete via isActive=false) ───────────────
-  deleteUser: adminProcedure
+    deleteUser: adminProcedure
     .input(z.object({ userId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       if ((ctx.user as any).id === input.userId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot deactivate your own account." });
       }
       const conn = await requireDb();
+      const [target] = await conn.select().from(users).where(eq(users.id, input.userId)).limit(1);
       await conn.update(users).set({ isActive: false }).where(eq(users.id, input.userId));
+
+      await writeAuditLog({
+        actorId:    (ctx.user as any).id,
+        actorName:  (ctx.user as any).name ?? (ctx.user as any).email,
+        action:     "user.deactivate",
+        targetType: "user",
+        targetId:   input.userId,
+        targetName: target?.email ?? undefined,
+        metadata:   { previouslyActive: target?.isActive },
+        ipAddress:  ctx.req.ip,
+      });
+
       return { success: true };
     }),
 
@@ -263,6 +317,17 @@ export const customAuthRouter = router({
         passwordChangedAt: new Date(),
         mustChangePassword: false,
       }).where(eq(users.id, (ctx.user as any).id));
+
+      await writeAuditLog({
+        actorId:    (ctx.user as any).id,
+        actorName:  (ctx.user as any).name ?? (ctx.user as any).email,
+        action:     "user.change_password",
+        targetType: "user",
+        targetId:   (ctx.user as any).id,
+        targetName: user.email ?? undefined,
+        metadata:   { mustChangePasswordCleared: user.mustChangePassword },
+        ipAddress:  ctx.req.ip,
+      });
 
       return { success: true };
     }),
