@@ -638,7 +638,7 @@ export const appRouter = router({
       .query(async ({ input }) => {
         const channel = await getChannelBySlug(input.channelSlug);
         if (!channel) throw new TRPCError({ code: "NOT_FOUND" });
-        const baseUrl = ENV.oAuthServerUrl?.replace("api.", "") ?? "";
+        const baseUrl = ENV.appUrl;
         return {
           feedUrl: `/api/roku/feed/${input.channelSlug}.json`,
           configUrl: `/api/roku/config/${input.channelSlug}.json`,

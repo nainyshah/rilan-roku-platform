@@ -321,3 +321,25 @@
 - [x] Add RESEND_API_KEY and RESEND_FROM environment variable support
 - [x] Dev-mode fallback: log emails to console when RESEND_API_KEY is absent
 - [x] Resend connectivity test (resend-connectivity.test.ts)
+
+## Auth SDK Replacement (2026-03-28)
+- [x] Replace sdk.authenticateRequest in context.ts with custom verifySessionJwt + DB lookup
+- [x] Replace sdk.ts with a deprecated no-op stub
+- [x] Replace oauth.ts with a no-op stub (registerOAuthRoutes does nothing)
+- [x] Remove dead ENV fields: appId, oAuthServerUrl, ownerOpenId
+- [x] Add ENV.appUrl for building absolute URLs (replaces oAuthServerUrl hack)
+- [x] Fix routers.ts Roku getUrl to use ENV.appUrl
+- [x] Remove ENV import from db.ts (ownerOpenId auto-admin fallback removed)
+- [x] Write custom-auth-context.test.ts (JWT round-trip, SDK deprecation, ENV cleanup)
+
+## Manus API Dependency Removal (2026-03-28)
+- [x] Replace Forge LLM with OpenAI-compatible endpoint (OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL)
+- [x] Replace Forge File Storage with AWS S3 SDK (S3_BUCKET, S3_REGION, S3_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_PUBLIC_BASE_URL)
+- [x] Replace Forge Notifications with Resend email delivery (reuses existing RESEND_API_KEY + RESEND_FROM)
+- [x] Stub out map.ts (no active usage in RILAN platform)
+- [x] Stub out imageGeneration.ts (no active usage in RILAN platform)
+- [x] Stub out voiceTranscription.ts (no active usage in RILAN platform)
+- [x] Remove Manus Analytics (Umami) script from client/index.html
+- [x] Remove vitePluginManusRuntime from vite.config.ts
+- [x] Update ENV registry to document new env vars and deprecate Forge vars
+- [x] Write self-hosted-modules.test.ts (18 tests: LLM x5, Storage x4, Notifications x4, Stubs x3, ENV x2)
