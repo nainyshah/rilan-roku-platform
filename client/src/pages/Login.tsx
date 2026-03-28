@@ -65,7 +65,7 @@ export default function Login() {
   const handleMagicLink = (e: React.FormEvent) => {
     e.preventDefault();
     setMagicError("");
-    magicLinkMutation.mutate({ email: magicEmail });
+    magicLinkMutation.mutate({ email: magicEmail, origin: window.location.origin });
   };
 
   return (

@@ -20,6 +20,7 @@
  */
 
 import { z } from "zod";
+import { sendEmail, buildMagicLinkEmail } from "./emailHelper";
 import { TRPCError } from "@trpc/server";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb } from "../db";
@@ -268,7 +269,11 @@ export const customAuthRouter = router({
 
   // ── requestMagicLink ───────────────────────────────────────────────────────
   requestMagicLink: publicProcedure
-    .input(z.object({ email: z.string().email() }))
+    .input(z.object({
+      email: z.string().email(),
+      /** Frontend must pass window.location.origin so the link works on any domain. */
+      origin: z.string().url().optional(),
+    }))
     .mutation(async ({ input }) => {
       const conn = await requireDb();
       const [user] = await conn.select().from(users).where(eq(users.email, input.email)).limit(1);
@@ -285,9 +290,19 @@ export const customAuthRouter = router({
         magicLinkExpiresAt: expiresAt,
       }).where(eq(users.id, user.id));
 
-      // In production, send via email. For now, log to console (dev mode).
-      const magicUrl = `/auth/magic?token=${rawToken}&email=${encodeURIComponent(input.email)}`;
-      console.log(`[MagicLink] Login URL for ${input.email}: ${magicUrl}`);
+       // Build the full magic-link URL using the frontend's origin so the link
+      // resolves correctly on any deployment domain.
+      const MAGIC_LINK_EXPIRES_MINUTES = 15;
+      const origin = input.origin ?? "";
+      const magicUrl = `${origin}/auth/magic?token=${rawToken}&email=${encodeURIComponent(input.email)}`;
+
+      // Send via SMTP when configured; falls back to console logging in dev mode.
+      const emailContent = buildMagicLinkEmail({
+        recipientName: user.name ?? input.email,
+        magicLinkUrl: magicUrl,
+        expiresInMinutes: MAGIC_LINK_EXPIRES_MINUTES,
+      });
+      await sendEmail({ to: input.email, ...emailContent });
 
       return { success: true };
     }),

@@ -44,6 +44,8 @@ import {
   Webhook,
   WifiOff,
   RefreshCw,
+  Users,
+  ShieldCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -71,6 +73,11 @@ const publishMenuItems = [
 const aiMenuItems = [
   { icon: Sparkles, label: "AI Features", path: "/ai" },
   { icon: Settings, label: "Settings", path: "/settings" },
+];
+
+/** Admin-only navigation items — only rendered when user.role === 'admin' */
+const adminMenuItems = [
+  { icon: Users, label: "User Management", path: "/users" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -194,7 +201,7 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
-  const allItems = [...contentMenuItems, ...publishMenuItems, ...aiMenuItems];
+  const allItems = [...contentMenuItems, ...publishMenuItems, ...aiMenuItems, ...adminMenuItems];
   const activeMenuItem = allItems.find((item) => {
     if (item.path === "/") return location === "/";
     return location.startsWith(item.path);
@@ -342,6 +349,39 @@ function DashboardLayoutContent({
                 })}
               </SidebarMenu>
             </SidebarGroup>
+
+            {/* ── Administration group — admin-only ── */}
+            {user?.role === "admin" && (
+              <>
+                <SidebarSeparator className="my-1" />
+                <SidebarGroup>
+                  {!isCollapsed && (
+                    <SidebarGroupLabel className="text-xs text-muted-foreground px-4 py-1 flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3 opacity-70" />
+                      Administration
+                    </SidebarGroupLabel>
+                  )}
+                  <SidebarMenu className="px-2">
+                    {adminMenuItems.map((item) => {
+                      const isActive = location.startsWith(item.path);
+                      return (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            isActive={isActive}
+                            onClick={() => setLocation(item.path)}
+                            tooltip={item.label}
+                            className="h-9 transition-all font-normal"
+                          >
+                            <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
+                            <span className={isActive ? "text-foreground font-medium" : "text-foreground/80"}>{item.label}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroup>
+              </>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="p-3 border-t border-sidebar-border">

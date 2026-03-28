@@ -305,3 +305,19 @@
 - [x] PasswordExpiryBanner: 90-day expiry alert with days-remaining countdown
 - [x] Replace all Manus OAuth references in App.tsx, DashboardLayout, const.ts
 - [x] Vitest tests: 33 new tests for all auth helpers and logic
+
+## Auth Follow-up Improvements (2026-03-28)
+- [ ] Harden admin seed: random first-boot password, log once, force change on next login
+- [ ] Add /users Administration group to DashboardLayout sidebar (admin-only)
+- [ ] Wire Nodemailer SMTP email delivery for magic links
+
+## Auth Follow-up Improvements (2026-03-28)
+- [ ] Harden admin seed: random first-boot password, log once, force change on next login
+- [ ] Add /users Administration group to DashboardLayout sidebar (admin-only)
+- [ ] Wire Nodemailer SMTP email delivery for magic links
+
+## Email Provider Migration (2026-03-28)
+- [x] Replace Nodemailer with Resend SDK for magic-link and password-expiry email delivery
+- [x] Add RESEND_API_KEY and RESEND_FROM environment variable support
+- [x] Dev-mode fallback: log emails to console when RESEND_API_KEY is absent
+- [x] Resend connectivity test (resend-connectivity.test.ts)
