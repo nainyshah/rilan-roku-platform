@@ -373,3 +373,6 @@
 - [x] Write audit log entry for google login
 - [x] Add "Continue with Google" button to Login.tsx
 - [x] Add Google icon SVG component (inline in Login.tsx)
+
+## UX Polish (2026-04-14)
+- [x] Show Google-linked badge next to user names in User Management table

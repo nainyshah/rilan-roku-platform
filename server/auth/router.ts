@@ -61,6 +61,7 @@ function safeUser(u: typeof users.$inferSelect) {
     name: u.name,
     email: u.email,
     role: u.role,
+    loginMethod: u.loginMethod,
     totpEnabled: u.totpEnabled,
     mustChangePassword: u.mustChangePassword,
     isActive: u.isActive,

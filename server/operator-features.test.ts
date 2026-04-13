@@ -36,9 +36,8 @@ function filterEntriesForBucket(entries: PollEntry[], bucketKey: number): PollEn
   return entries.filter((e) => getBucketKey(e.timestamp) === bucketKey);
 }
 
-function buildBuckets(entries: PollEntry[], windowMs = 24 * 60 * 60 * 1000) {
-  const now = Date.now();
-  const cutoff = now - windowMs;
+function buildBuckets(entries: PollEntry[], windowMs = 24 * 60 * 60 * 1000, nowMs = Date.now()) {
+  const cutoff = nowMs - windowMs;
   const recent = entries.filter((e) => e.timestamp.getTime() >= cutoff);
 
   const map = new Map<number, PollEntry[]>();
@@ -51,8 +50,21 @@ function buildBuckets(entries: PollEntry[], windowMs = 24 * 60 * 60 * 1000) {
 }
 
 describe('SparklineDrillDown — bucket helpers', () => {
-  // Use real Date.now() so entries fall within the 24h window regardless of when the test runs.
-  const now = new Date();
+  // Use a fixed anchor aligned to the start of a 30-min bucket so t(0..10) always
+  // land in the same bucket regardless of when the test runs.
+  // BUCKET_SIZE_MS = 30 min = 1 800 000 ms
+  // Pick an anchor that is exactly 100 minutes before the start of a bucket boundary.
+  // bucket boundary = Math.ceil(Date.now() / BUCKET_SIZE_MS) * BUCKET_SIZE_MS
+  // We pin to a static timestamp (2026-01-01T00:00:00Z) which is a known bucket boundary.
+  const ANCHOR_MS = 1735689600000; // 2026-01-01T00:00:00.000Z — divisible by BUCKET_SIZE_MS
+  // now = ANCHOR + 10 min, so:
+  //   t(0)  = ANCHOR - 90 min  → bucket 964269
+  //   t(5)  = ANCHOR - 85 min  → bucket 964269  (same)
+  //   t(10) = ANCHOR - 80 min  → bucket 964269  (same)
+  //   t(35) = ANCHOR - 55 min  → bucket 964270  (different)
+  //   t(40) = ANCHOR - 50 min  → bucket 964270  (same as t(35))
+  //   t(90) = ANCHOR +  0 min  → bucket 964272  (different)
+  const now = new Date(ANCHOR_MS + 10 * 60 * 1000); // 10 min after a bucket start
   const t = (offsetMin: number) => new Date(now.getTime() - (100 - offsetMin) * 60 * 1000);
 
   const entries: PollEntry[] = [
@@ -88,17 +100,17 @@ describe('SparklineDrillDown — bucket helpers', () => {
   });
 
   it('buildBuckets groups entries into correct buckets', () => {
-    const map = buildBuckets(entries, 24 * 60 * 60 * 1000);
+    const map = buildBuckets(entries, 24 * 60 * 60 * 1000, now.getTime());
     // 3 distinct buckets: t(0-10), t(35-40), t(90)
     expect(map.size).toBe(3);
   });
 
   it('buildBuckets excludes entries older than the window', () => {
-    // Only include entries within a 1-hour window
-    const map = buildBuckets(entries, 60 * 60 * 1000);
-    // t(90) is 90 min from now — outside a 60-min window
+    // Only include entries within a 1-hour window relative to the fixed anchor
+    const map = buildBuckets(entries, 60 * 60 * 1000, now.getTime());
+    // t(90) is 90 min before now — outside a 60-min window
     const allEntries = [...map.values()].flat();
-    expect(allEntries.every((e) => e.timestamp.getTime() >= Date.now() - 60 * 60 * 1000)).toBe(true);
+    expect(allEntries.every((e) => e.timestamp.getTime() >= now.getTime() - 60 * 60 * 1000)).toBe(true);
   });
 
   it('a bucket with all successes has 100% success rate', () => {
