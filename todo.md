@@ -363,3 +363,13 @@
 - [x] Fix login form email placeholder (admin@rilan.local → admin@rilan.com)
 - [x] Add auth.setPassword procedure + account settings UI for Google OAuth users with no passwordHash
 - [x] Wire user.login audit log entries into loginWithPassword and verifyMagicLink
+
+## Google OAuth Integration (2026-04-14)
+- [x] Install passport, passport-google-oauth20, and @types/passport-google-oauth20
+- [x] Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET env secrets
+- [x] Implement /api/auth/google and /api/auth/google/callback Express routes
+- [x] DB upsert: create or link Google account to existing user by email
+- [x] Issue JWT session cookie on successful Google callback
+- [x] Write audit log entry for google login
+- [x] Add "Continue with Google" button to Login.tsx
+- [x] Add Google icon SVG component (inline in Login.tsx)

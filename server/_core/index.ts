@@ -4,6 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { seedAdminUser } from "../auth/seed-admin";
+import { registerGoogleOAuthRoutes } from "../auth/googleOAuth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -207,6 +208,12 @@ async function startServer() {
 
   // Seed the initial admin user if none exists yet
   await seedAdminUser();
+
+  // ─── Google OAuth routes ──────────────────────────────────────────────────
+  // Must be registered before tRPC middleware so /api/auth/google/* is handled
+  // by Express directly (not routed through tRPC).
+  registerGoogleOAuthRoutes(app);
+
   // tRPC API
   app.use(
     "/api/trpc",

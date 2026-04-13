@@ -26,6 +26,10 @@
  *   AWS_ACCESS_KEY_ID     — S3 access key
  *   AWS_SECRET_ACCESS_KEY — S3 secret key
  *
+ * ─── Google OAuth ───────────────────────────────────────────────────────────
+ *   GOOGLE_CLIENT_ID     — OAuth 2.0 client ID from Google Cloud Console
+ *   GOOGLE_CLIENT_SECRET — OAuth 2.0 client secret
+ *
  * ─── Redis ───────────────────────────────────────────────────────────────────
  *   REDIS_URL         — Redis / Upstash connection string
  *
