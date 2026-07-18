@@ -376,3 +376,7 @@
 
 ## UX Polish (2026-04-14)
 - [x] Show Google-linked badge next to user names in User Management table
+
+## Bug Fixes (2026-07-18)
+- [x] Fix Roku feed returning only header fields — removed validationStatus filter from getFeedData so published videos always appear
+- [x] Guard buildFeedItem against videos with missing streamUrl/thumbnailUrl to prevent feed crashes

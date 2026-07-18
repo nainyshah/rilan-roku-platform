@@ -264,6 +264,12 @@ export function generateRokuFeed(
   const movies: RokuFeedItem[] = [];
 
   for (const [, video] of Array.from(videoMap)) {
+    // Skip videos missing the two fields Roku requires on every item.
+    // These are advisory skips — the validation report will flag them separately.
+    if (!video.streamUrl || !video.thumbnailUrl) {
+      console.warn(`[feedGenerator] Skipping video ${video.id} ("${video.title}") — missing streamUrl or thumbnailUrl`);
+      continue;
+    }
     const item = buildFeedItem(video);
     const duration = video.durationSeconds ?? 0;
     if (video.contentType === "movie" || video.contentType === "series" || video.contentType === "special") {

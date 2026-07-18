@@ -411,7 +411,12 @@ export async function getFeedData(channelSlug: string) {
     .where(and(eq(channelCategories.channelId, channel.id), eq(channelCategories.isVisible, true)))
     .orderBy(channelCategories.rowOrder);
 
-  // Get all published videos assigned to this channel
+  // Get all published videos assigned to this channel.
+  // NOTE: validationStatus is intentionally NOT filtered here — a video that has
+  // been manually set to "published" should appear in the feed regardless of
+  // whether the auto-validator has run.  The validator is advisory; publishStatus
+  // is the authoritative gate.  Videos with critical missing fields (no streamUrl,
+  // no thumbnail) are silently skipped by buildFeedItem() in feedGenerator.ts.
   const channelVideoRows = await db
     .select({ assignment: channelVideos, video: videos })
     .from(channelVideos)
@@ -419,8 +424,7 @@ export async function getFeedData(channelSlug: string) {
     .where(
       and(
         eq(channelVideos.channelId, channel.id),
-        eq(videos.publishStatus, "published"),
-        eq(videos.validationStatus, "valid")
+        eq(videos.publishStatus, "published")
       )
     )
     .orderBy(channelVideos.sortOrder);
