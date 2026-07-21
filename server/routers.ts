@@ -5,6 +5,7 @@ import { aiRouter } from "./routers/ai";
 import { dispatchWebhooks } from "./webhookDispatcher";
 import { invalidateFeedCacheRedis, purgeAllFeedCacheRedis, getFeedCacheStatsRedis } from "./redisFeedCache";
 import { z } from "zod";
+import fs from "fs";
 import {
   assignCategoryToChannel,
   assignVideoToChannel,
@@ -685,6 +686,34 @@ export const appRouter = router({
     delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => { await deleteScreensaverItem(input.id); return { success: true }; }),
+    uploadImage: adminProcedure
+      .input(z.object({
+        appId: z.number(),
+        title: z.string().optional(),
+        fileName: z.string(),
+        mimeType: z.string(),
+        fileDataBase64: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const buffer = Buffer.from(input.fileDataBase64, "base64");
+        const safe = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const rel = `screensaver/${input.appId}/${Date.now()}-${safe}`;
+        const dir = `/app/uploads/screensaver/${input.appId}`;
+        await fs.promises.mkdir(dir, { recursive: true });
+        await fs.promises.writeFile(`/app/uploads/${rel}`, buffer);
+        const base = (process.env.APP_URL ?? "").replace(/\/$/, "");
+        const url = `${base}/uploads/${rel}`;
+        await createScreensaverItem({
+          appId: input.appId,
+          title: input.title ?? null,
+          mediaType: "image",
+          imageUrl: url,
+          videoUrl: null,
+          sortOrder: 0,
+          isActive: 1,
+        });
+        return { url };
+      }),
   }),
 
   // ─── Import ─────────────────────────────────────────────────────────────────

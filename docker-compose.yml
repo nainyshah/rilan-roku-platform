@@ -6,6 +6,8 @@ services:
     env_file: .env
     ports:
       - "3100:3000"
+    volumes:
+      - uploads-data:/app/uploads      # ← add
     depends_on:
       db:
         condition: service_healthy
@@ -50,6 +52,7 @@ services:
 volumes:
   db-data:
   redis-data:
+  uploads-data:      # ← add
 
 networks:
   rilan-net:

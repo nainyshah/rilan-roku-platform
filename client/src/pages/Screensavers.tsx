@@ -9,8 +9,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, MonitorPlay, ToggleLeft, ToggleRight, Image as ImageIcon, Film, PlayCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Plus, Trash2, MonitorPlay, ToggleLeft, ToggleRight, Image as ImageIcon, Film, PlayCircle, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 type MediaType = "image" | "video";
 
@@ -28,6 +28,8 @@ export default function Screensavers() {
     { enabled: appId != null },
   );
 
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
   // ── App dialog ──
   const [appOpen, setAppOpen] = useState(false);
   const [appName, setAppName] = useState("");
@@ -41,7 +43,7 @@ export default function Screensavers() {
     onError: (e) => toast.error(e.message),
   });
 
-  // ── Item dialog ──
+  // ── Item dialog (URL-based) ──
   const [open, setOpen] = useState(false);
   const [mediaType, setMediaType] = useState<MediaType>("image");
   const [title, setTitle] = useState("");
@@ -62,6 +64,32 @@ export default function Screensavers() {
     onError: (e) => toast.error(e.message),
   });
 
+  // ── Upload ──
+  const uploadImage = trpc.screensaver.uploadImage.useMutation({
+    onSuccess: () => { utils.screensaver.list.invalidate(); toast.success("Image uploaded"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file || appId == null) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("Please choose an image under 10 MB"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const base64 = dataUrl.split(",")[1] || "";
+      uploadImage.mutate({
+        appId,
+        title: file.name.replace(/\.[^.]+$/, ""),
+        fileName: file.name,
+        mimeType: file.type || "image/jpeg",
+        fileDataBase64: base64,
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+
   const currentApp = apps?.find((a) => a.id === appId);
   const canSave = mediaType === "image" ? !!imageUrl : !!videoUrl;
 
@@ -71,21 +99,15 @@ export default function Screensavers() {
         <MonitorPlay className="h-6 w-6 text-primary" />
         <div>
           <h1 className="text-2xl font-bold">Screensavers</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage screensaver apps and the media each one shows on Roku.
-          </p>
+          <p className="text-sm text-muted-foreground">Manage screensaver apps and the media each one shows on Roku.</p>
         </div>
       </div>
 
-      {/* App bar: pick app, create app, feed URL */}
+      {/* App bar */}
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={appId != null ? String(appId) : ""} onValueChange={(v) => setAppId(Number(v))}>
           <SelectTrigger className="w-64"><SelectValue placeholder="Select a screensaver app" /></SelectTrigger>
-          <SelectContent>
-            {apps?.map((a) => (
-              <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
-            ))}
-          </SelectContent>
+          <SelectContent>{apps?.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
         </Select>
 
         <Dialog open={appOpen} onOpenChange={setAppOpen}>
@@ -93,14 +115,10 @@ export default function Screensavers() {
           <DialogContent>
             <DialogHeader><DialogTitle>New screensaver app</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-2">
-              <div className="space-y-1">
-                <Label>Name</Label>
-                <Input value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="e.g. Aquarium, World Cityscape" />
-              </div>
-              <div className="space-y-1">
-                <Label>Description (optional)</Label>
-                <Input value={appDesc} onChange={(e) => setAppDesc(e.target.value)} />
-              </div>
+              <div className="space-y-1"><Label>Name</Label>
+                <Input value={appName} onChange={(e) => setAppName(e.target.value)} placeholder="e.g. Aquarium, World Cityscape" /></div>
+              <div className="space-y-1"><Label>Description (optional)</Label>
+                <Input value={appDesc} onChange={(e) => setAppDesc(e.target.value)} /></div>
               <Button className="w-full" disabled={!appName || createApp.isPending}
                 onClick={() => createApp.mutate({ name: appName, description: appDesc || undefined })}>
                 {createApp.isPending ? "Creating…" : "Create app"}
@@ -111,9 +129,7 @@ export default function Screensavers() {
 
         {currentApp ? (
           <>
-            <code className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-              /api/roku/screensaver/{currentApp.slug}.json
-            </code>
+            <code className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">/api/roku/screensaver/{currentApp.slug}.json</code>
             <Button variant="ghost" size="sm" className="text-destructive"
               onClick={() => { if (confirm(`Delete app "${currentApp.name}" and its items?`)) deleteApp.mutate({ id: currentApp.id }); }}>
               <Trash2 className="h-4 w-4 mr-1" /> Delete app
@@ -123,68 +139,57 @@ export default function Screensavers() {
       </div>
 
       {!apps || apps.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground">
-          No screensaver apps yet. Click "New app" (e.g. Aquarium) to start.
-        </CardContent></Card>
+        <Card><CardContent className="py-12 text-center text-muted-foreground">No screensaver apps yet. Click "New app" (e.g. Aquarium) to start.</CardContent></Card>
       ) : appId == null ? null : (
         <>
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">{currentApp?.name} — media</h2>
-            <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
-              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> Add item</Button></DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Add item to {currentApp?.name}</DialogTitle></DialogHeader>
-                <div className="space-y-4 pt-2">
-                  <div className="flex gap-2">
-                    <Button variant={mediaType === "image" ? "default" : "outline"} size="sm" onClick={() => setMediaType("image")}>
-                      <ImageIcon className="h-4 w-4 mr-1" /> Image
-                    </Button>
-                    <Button variant={mediaType === "video" ? "default" : "outline"} size="sm" onClick={() => setMediaType("video")}>
-                      <Film className="h-4 w-4 mr-1" /> Video (slow-mo)
+            <div className="flex items-center gap-2">
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
+              <Button variant="outline" disabled={uploadImage.isPending} onClick={() => fileRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-2" /> {uploadImage.isPending ? "Uploading…" : "Upload image"}
+              </Button>
+
+              <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+                <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" /> Add by URL</Button></DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Add item to {currentApp?.name}</DialogTitle></DialogHeader>
+                  <div className="space-y-4 pt-2">
+                    <div className="flex gap-2">
+                      <Button variant={mediaType === "image" ? "default" : "outline"} size="sm" onClick={() => setMediaType("image")}><ImageIcon className="h-4 w-4 mr-1" /> Image</Button>
+                      <Button variant={mediaType === "video" ? "default" : "outline"} size="sm" onClick={() => setMediaType("video")}><Film className="h-4 w-4 mr-1" /> Video</Button>
+                    </div>
+                    <div className="space-y-1"><Label>Title (optional)</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+                    {mediaType === "video" ? (
+                      <>
+                        <div className="space-y-1"><Label>Video URL (HLS .m3u8 or MP4)</Label><Input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…/playlist.m3u8" /></div>
+                        <div className="space-y-1"><Label>Poster URL (optional)</Label><Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…/thumbnail.jpg" /></div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-1"><Label>Image URL</Label><Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…/image.jpg" /></div>
+                        {imageUrl ? <div className="rounded-lg overflow-hidden border border-border aspect-video bg-muted"><img src={imageUrl} alt="preview" className="w-full h-full object-cover" /></div> : null}
+                      </>
+                    )}
+                    <Button className="w-full" disabled={!canSave || create.isPending}
+                      onClick={() => create.mutate({ appId: appId!, title: title || undefined, mediaType, imageUrl: imageUrl || undefined, videoUrl: mediaType === "video" ? (videoUrl || undefined) : undefined, sortOrder: items ? items.length : 0 })}>
+                      {create.isPending ? "Adding…" : "Add item"}
                     </Button>
                   </div>
-                  <div className="space-y-1"><Label>Title (optional)</Label>
-                    <Input value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-                  {mediaType === "video" ? (
-                    <>
-                      <div className="space-y-1"><Label>Video URL (HLS .m3u8 or MP4)</Label>
-                        <Input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…/playlist.m3u8" /></div>
-                      <div className="space-y-1"><Label>Poster URL (optional)</Label>
-                        <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…/thumbnail.jpg" /></div>
-                      <p className="text-xs text-muted-foreground">Played muted + looping. For slow-mo, use a clip encoded slow-motion.</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="space-y-1"><Label>Image URL</Label>
-                        <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://…/image.jpg" /></div>
-                      {imageUrl ? <div className="rounded-lg overflow-hidden border border-border aspect-video bg-muted">
-                        <img src={imageUrl} alt="preview" className="w-full h-full object-cover" /></div> : null}
-                    </>
-                  )}
-                  <Button className="w-full" disabled={!canSave || create.isPending}
-                    onClick={() => create.mutate({
-                      appId: appId!, title: title || undefined, mediaType,
-                      imageUrl: imageUrl || undefined,
-                      videoUrl: mediaType === "video" ? (videoUrl || undefined) : undefined,
-                      sortOrder: items ? items.length : 0,
-                    })}>
-                    {create.isPending ? "Adding…" : "Add item"}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {isLoading ? <p className="text-muted-foreground">Loading…</p>
             : !items || items.length === 0 ? (
-              <Card><CardContent className="py-12 text-center text-muted-foreground">No media in this app yet.</CardContent></Card>
+              <Card><CardContent className="py-12 text-center text-muted-foreground">No media in this app yet. Upload an image or add one by URL.</CardContent></Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {items.map((it) => (
                   <Card key={it.id} className="overflow-hidden">
                     <div className="aspect-video bg-muted relative flex items-center justify-center">
-                      {it.imageUrl ? <img src={it.imageUrl} alt={it.title ?? ""} className="w-full h-full object-cover" />
-                        : <Film className="h-10 w-10 text-muted-foreground" />}
+                      {it.imageUrl ? <img src={it.imageUrl} alt={it.title ?? ""} className="w-full h-full object-cover" /> : <Film className="h-10 w-10 text-muted-foreground" />}
                       {it.mediaType === "video" ? <PlayCircle className="h-12 w-12 text-white/90 absolute drop-shadow-lg" /> : null}
                     </div>
                     <CardContent className="p-4 space-y-3">
@@ -199,9 +204,7 @@ export default function Screensavers() {
                         <Button variant="outline" size="sm" onClick={() => update.mutate({ id: it.id, isActive: it.isActive ? 0 : 1 })}>
                           {it.isActive ? <><ToggleRight className="h-4 w-4 mr-1" /> Hide</> : <><ToggleLeft className="h-4 w-4 mr-1" /> Show</>}
                         </Button>
-                        <Button variant="destructive" size="sm" onClick={() => remove.mutate({ id: it.id })}>
-                          <Trash2 className="h-4 w-4 mr-1" /> Delete
-                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => remove.mutate({ id: it.id })}><Trash2 className="h-4 w-4 mr-1" /> Delete</Button>
                       </div>
                     </CardContent>
                   </Card>
