@@ -50,6 +50,13 @@
       "when": 1774698709906,
       "tag": "0006_abnormal_arachne",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1784639492362,
+      "tag": "0007_known_moonstone",
+      "breakpoints": true
     }
   ]
 }
