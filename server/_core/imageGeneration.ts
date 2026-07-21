@@ -7,7 +7,7 @@
  * To restore image generation, integrate with OpenAI Images API or another
  * provider and set OPENAI_API_KEY in your environment.
  *
- * NOTE: The RILAN Roku Platform does not currently use image generation.
+ * NOTE: The SennaVision Roku Platform does not currently use image generation.
  *       This file can be safely deleted once all imports are removed.
  */
 

@@ -18,7 +18,7 @@ import {
   getFeedCacheStatusForSlug,
 } from "./feedCache";
 
-const SAMPLE_FEED = JSON.stringify({ providerName: "RILAN", language: "en", movies: [] });
+const SAMPLE_FEED = JSON.stringify({ providerName: "SennaVision", language: "en", movies: [] });
 
 describe("feedCache", () => {
   beforeEach(() => {

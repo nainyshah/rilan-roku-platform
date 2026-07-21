@@ -1,12 +1,12 @@
 /**
  * server/auth/emailHelper.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Centralised email delivery for the RILAN Roku Platform using the Resend API.
+ * Centralised email delivery for the SennaVision Roku Platform using the Resend API.
  *
  * Required environment variables:
  *   RESEND_API_KEY  — API key from https://resend.com (starts with "re_")
  *   RESEND_FROM     — Verified sender address, e.g.:
- *                     "RILAN Platform <no-reply@yourdomain.com>"
+ *                     "SennaVision Platform <no-reply@yourdomain.com>"
  *                     Falls back to "onboarding@resend.dev" in dev mode.
  *
  * If RESEND_API_KEY is absent the helper logs the email to the console so the
@@ -26,7 +26,7 @@ function getResend(): Resend | null {
 }
 
 function getFromAddress(): string {
-  return process.env.RESEND_FROM ?? "RILAN Platform <onboarding@resend.dev>";
+  return process.env.RESEND_FROM ?? "SennaVision Platform <onboarding@resend.dev>";
 }
 
 // ── Public send interface ────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ export function buildMagicLinkEmail(opts: {
   expiresInMinutes: number;
 }): { subject: string; html: string; text: string } {
   const { recipientName, magicLinkUrl, expiresInMinutes } = opts;
-  const subject = "Your RILAN Platform sign-in link";
+  const subject = "Your SennaVision Platform sign-in link";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -105,7 +105,7 @@ export function buildMagicLinkEmail(opts: {
           <tr>
             <td style="padding:28px 32px 20px;border-bottom:1px solid #2a2a2a;">
               <span style="font-size:18px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;">
-                &#128251; RILAN Platform
+                &#128251; SennaVision Platform
               </span>
             </td>
           </tr>
@@ -113,7 +113,7 @@ export function buildMagicLinkEmail(opts: {
           <tr>
             <td style="padding:32px;">
               <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#ffffff;line-height:1.3;">
-                Sign in to RILAN
+                Sign in to SennaVision
               </h1>
               <p style="margin:0 0 24px;font-size:15px;color:#a0a0a0;line-height:1.6;">
                 Hi ${recipientName},<br/>
@@ -127,7 +127,7 @@ export function buildMagicLinkEmail(opts: {
                   <td style="background:#6366f1;border-radius:8px;">
                     <a href="${magicLinkUrl}"
                        style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">
-                      Sign in to RILAN &rarr;
+                      Sign in to SennaVision &rarr;
                     </a>
                   </td>
                 </tr>
@@ -147,7 +147,7 @@ export function buildMagicLinkEmail(opts: {
               <p style="margin:0;font-size:12px;color:#505050;line-height:1.5;">
                 If you didn't request this link, you can safely ignore this email.
                 Your account will not be affected.<br/>
-                &copy; ${new Date().getFullYear()} RILAN Roku Content Platform
+                &copy; ${new Date().getFullYear()} SennaVision Roku Content Platform
               </p>
             </td>
           </tr>
@@ -158,7 +158,7 @@ export function buildMagicLinkEmail(opts: {
 </body>
 </html>`;
 
-  const text = `Sign in to RILAN Platform
+  const text = `Sign in to SennaVision Platform
 
 Hi ${recipientName},
 
@@ -168,7 +168,7 @@ ${magicLinkUrl}
 
 If you didn't request this, you can safely ignore this email.
 
-— RILAN Roku Content Platform`;
+— SennaVision Roku Content Platform`;
 
   return { subject, html, text };
 }
@@ -186,8 +186,8 @@ export function buildPasswordExpiryEmail(opts: {
   const isExpired = daysRemaining <= 0;
 
   const subject = isExpired
-    ? "⚠️ Your RILAN Platform password has expired"
-    : `Your RILAN Platform password expires in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`;
+    ? "⚠️ Your SennaVision Platform password has expired"
+    : `Your SennaVision Platform password expires in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}`;
 
   const accentColor = isExpired ? "#ef4444" : "#f59e0b";
 
@@ -202,7 +202,7 @@ export function buildPasswordExpiryEmail(opts: {
                style="background:#1a1a1a;border-radius:12px;border:1px solid #2a2a2a;overflow:hidden;max-width:560px;width:100%;">
           <tr>
             <td style="padding:28px 32px 20px;border-bottom:1px solid #2a2a2a;">
-              <span style="font-size:18px;font-weight:700;color:#ffffff;">&#128251; RILAN Platform</span>
+              <span style="font-size:18px;font-weight:700;color:#ffffff;">&#128251; SennaVision Platform</span>
             </td>
           </tr>
           <tr>
@@ -215,8 +215,8 @@ export function buildPasswordExpiryEmail(opts: {
               <p style="margin:0 0 24px;font-size:15px;color:#a0a0a0;line-height:1.6;">
                 Hi ${recipientName},<br/>
                 ${isExpired
-                  ? "Your RILAN Platform password has expired. Please update it now to regain access."
-                  : `Your RILAN Platform password will expire in
+                  ? "Your SennaVision Platform password has expired. Please update it now to regain access."
+                  : `Your SennaVision Platform password will expire in
                      <strong style="color:#ffffff;">${daysRemaining} day${daysRemaining === 1 ? "" : "s"}</strong>.
                      Update it before it expires to avoid being locked out.`}
               </p>
@@ -235,7 +235,7 @@ export function buildPasswordExpiryEmail(opts: {
           <tr>
             <td style="padding:20px 32px;border-top:1px solid #2a2a2a;">
               <p style="margin:0;font-size:12px;color:#505050;">
-                &copy; ${new Date().getFullYear()} RILAN Roku Content Platform
+                &copy; ${new Date().getFullYear()} SennaVision Roku Content Platform
               </p>
             </td>
           </tr>
@@ -251,12 +251,12 @@ export function buildPasswordExpiryEmail(opts: {
 Hi ${recipientName},
 
 ${isExpired
-  ? "Your RILAN Platform password has expired. Please update it now."
+  ? "Your SennaVision Platform password has expired. Please update it now."
   : `Your password expires in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}. Update it before it expires.`}
 
 ${changePasswordUrl}
 
-— RILAN Roku Content Platform`;
+— SennaVision Roku Content Platform`;
 
   return { subject, html, text };
 }

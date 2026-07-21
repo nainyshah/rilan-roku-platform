@@ -9,7 +9,7 @@
  *
  * Set OPENAI_API_KEY in your environment and replace the stub below.
  *
- * NOTE: The RILAN Roku Platform does not currently use voice transcription.
+ * NOTE: The SennaVision Roku Platform does not currently use voice transcription.
  *       This file can be safely deleted once all imports are removed.
  */
 

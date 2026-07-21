@@ -37,7 +37,7 @@ const defaultForm: VideoForm = {
   contentType: "clip",
   contentRating: "all",
   releaseDate: "",
-  rightsOwner: "RILAN GAMES LLC",
+  rightsOwner: "SennaVision GAMES LLC",
   publishStatus: "draft",
   categoryIds: [],
   tags: "",
@@ -66,7 +66,7 @@ export default function VideoDetail() {
         contentType: video.contentType ?? "clip",
         contentRating: video.contentRating ?? "all",
         releaseDate: video.releaseDate ?? "",
-        rightsOwner: video.rightsOwner ?? "RILAN GAMES LLC",
+        rightsOwner: video.rightsOwner ?? "SennaVision GAMES LLC",
         publishStatus: video.publishStatus,
         categoryIds: video.categoryIds ?? [],
         tags: Array.isArray(video.tags) ? (video.tags as string[]).join(", ") : "",
@@ -192,7 +192,7 @@ export default function VideoDetail() {
               </div>
               <div className="space-y-1.5">
                 <Label>Rights Owner</Label>
-                <Input placeholder="RILAN GAMES LLC" value={form.rightsOwner} onChange={(e) => setForm({ ...form, rightsOwner: e.target.value })} />
+                <Input placeholder="SennaVision GAMES LLC" value={form.rightsOwner} onChange={(e) => setForm({ ...form, rightsOwner: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Tags (comma-separated)</Label>

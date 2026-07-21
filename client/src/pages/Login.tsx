@@ -76,7 +76,7 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-2">
             <ShieldCheck className="w-7 h-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">RILAN Roku Platform</h1>
+          <h1 className="text-2xl font-bold tracking-tight">SennaVision Roku Platform</h1>
           <p className="text-sm text-muted-foreground">Sign in to your account</p>
         </div>
 

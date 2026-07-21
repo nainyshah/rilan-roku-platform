@@ -1,7 +1,7 @@
 /**
  * Settings.tsx
  *
- * Operator settings page for the RILAN Roku Content Platform.
+ * Operator settings page for the SennaVision Roku Content Platform.
  * Exposes two configurable preferences:
  *
  *   1. Stale-data threshold — how old lastSyncedAt can be before stat cards
@@ -186,7 +186,7 @@ export default function Settings() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Settings</h1>
             <p className="text-sm text-muted-foreground">
-              Configure operator preferences for the RILAN platform dashboard.
+              Configure operator preferences for the SennaVision platform dashboard.
             </p>
           </div>
         </div>

@@ -319,7 +319,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            RILAN Roku Content Platform — channel publishing overview
+            SennaVision Roku Content Platform — channel publishing overview
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -372,7 +372,7 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-2">
             <Radio className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium text-muted-foreground">RILAN GAMES LLC</span>
+            <span className="text-sm font-medium text-muted-foreground">SennaVision GAMES LLC</span>
           </div>
         </div>
       </div>
@@ -514,10 +514,10 @@ export default function Dashboard() {
               Public Roku Direct Publisher feed URLs for your active channels:
             </p>
             {[
-              { slug: "shorts-tv", name: "RILAN Shorts TV" },
-              { slug: "kids-tv", name: "RILAN Kids TV" },
-              { slug: "food-tv", name: "RILAN Food TV" },
-              { slug: "travel-tv", name: "RILAN Travel TV" },
+              { slug: "shorts-tv", name: "SennaVision Shorts TV" },
+              { slug: "kids-tv", name: "SennaVision Kids TV" },
+              { slug: "food-tv", name: "SennaVision Food TV" },
+              { slug: "travel-tv", name: "SennaVision Travel TV" },
             ].map((ch) => (
               <div key={ch.slug} className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">{ch.name}</span>

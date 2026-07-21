@@ -1,5 +1,5 @@
 /**
- * AI Router — advanced AI features for the RILAN Roku Content Platform
+ * AI Router — advanced AI features for the SennaVision Roku Content Platform
  */
 
 import { z } from "zod";

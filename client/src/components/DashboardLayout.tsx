@@ -157,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex flex-col items-center gap-4">
             <div className="flex items-center gap-2 mb-2">
               <Radio className="h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold tracking-tight">RILAN</span>
+              <span className="text-2xl font-bold tracking-tight">SennaVision</span>
             </div>
             <h1 className="text-xl font-semibold tracking-tight text-center text-foreground">
               Roku Content Platform
@@ -258,7 +258,7 @@ function DashboardLayoutContent({
                 <div className="flex items-center gap-2 min-w-0">
                   <Radio className="h-4 w-4 text-primary shrink-0" />
                   <span className="font-bold tracking-tight text-sm truncate text-foreground">
-                    RILAN Platform
+                    SennaVision Platform
                   </span>
                 </div>
               )}

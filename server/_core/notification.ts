@@ -81,7 +81,7 @@ function buildNotificationEmail(title: string, content: string): {
   html: string;
   text: string;
 } {
-  const subject = `[RILAN Platform] ${title}`;
+  const subject = `[SennaVision Platform] ${title}`;
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -94,7 +94,7 @@ function buildNotificationEmail(title: string, content: string): {
                style="background:#1a1a1a;border-radius:12px;border:1px solid #2a2a2a;overflow:hidden;max-width:560px;width:100%;">
           <tr>
             <td style="padding:28px 32px 20px;border-bottom:1px solid #2a2a2a;">
-              <span style="font-size:18px;font-weight:700;color:#ffffff;">&#128251; RILAN Platform</span>
+              <span style="font-size:18px;font-weight:700;color:#ffffff;">&#128251; SennaVision Platform</span>
             </td>
           </tr>
           <tr>
@@ -106,7 +106,7 @@ function buildNotificationEmail(title: string, content: string): {
           <tr>
             <td style="padding:20px 32px;border-top:1px solid #2a2a2a;">
               <p style="margin:0;font-size:12px;color:#505050;">
-                Sent at ${new Date().toUTCString()} &mdash; &copy; ${new Date().getFullYear()} RILAN Roku Content Platform
+                Sent at ${new Date().toUTCString()} &mdash; &copy; ${new Date().getFullYear()} SennaVision Roku Content Platform
               </p>
             </td>
           </tr>
@@ -117,7 +117,7 @@ function buildNotificationEmail(title: string, content: string): {
 </body>
 </html>`;
 
-  const text = `[RILAN Platform Notification]\n\n${title}\n\n${content}\n\nSent at ${new Date().toUTCString()}`;
+  const text = `[SennaVision Platform Notification]\n\n${title}\n\n${content}\n\nSent at ${new Date().toUTCString()}`;
 
   return { subject, html, text };
 }

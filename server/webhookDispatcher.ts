@@ -91,7 +91,7 @@ async function attemptDelivery(
         "X-Roku-Signature": signature,
         "X-Roku-Event": JSON.parse(body).event ?? "unknown",
         "X-Webhook-Attempt": String(attempt),
-        "User-Agent": "RILAN-Roku-Platform/1.0",
+        "User-Agent": "SennaVision-Roku-Platform/1.0",
       },
       body,
       signal: controller.signal,
@@ -276,7 +276,7 @@ export async function testWebhook(
     channelId,
     timestamp: new Date().toISOString(),
     feedUrl: `/api/roku/feed/${channelSlug}.json`,
-    data: { message: "This is a test ping from RILAN Roku Platform" },
+    data: { message: "This is a test ping from SennaVision Roku Platform" },
   };
   const body = JSON.stringify(payload);
 

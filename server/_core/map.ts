@@ -11,7 +11,7 @@
  * Set GOOGLE_MAPS_API_KEY in your environment and replace the stub below
  * with a real implementation.
  *
- * NOTE: The RILAN Roku Platform does not currently use any maps features.
+ * NOTE: The SennaVision Roku Platform does not currently use any maps features.
  *       This file can be safely deleted once all imports are removed.
  */
 

@@ -84,7 +84,7 @@ export function useRecoveryNotification() {
         const recoveredAt = new Date().toLocaleString();
         mutateRef.current({
           title: '✅ Service Recovered',
-          content: `The RILAN Roku Content Platform backend has recovered from an outage and is now operational.\n\nRecovery time: ${recoveredAt}\n\nAll services should be functioning normally. No further action is required unless you notice ongoing issues.`,
+          content: `The SennaVision Roku Content Platform backend has recovered from an outage and is now operational.\n\nRecovery time: ${recoveredAt}\n\nAll services should be functioning normally. No further action is required unless you notice ongoing issues.`,
         });
       }
     });

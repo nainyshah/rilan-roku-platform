@@ -129,7 +129,7 @@ export default function Channels() {
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
                 <Label>Channel Name *</Label>
-                <Input placeholder="e.g. RILAN Sports TV" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <Input placeholder="e.g. SennaVision Sports TV" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Description</Label>

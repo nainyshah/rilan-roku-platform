@@ -1,5 +1,5 @@
 /**
- * Centralised environment-variable registry for the RILAN Roku Platform.
+ * Centralised environment-variable registry for the SennaVision Roku Platform.
  *
  * All env vars consumed by server code should be listed here so they are
  * easy to audit and document.
@@ -10,7 +10,7 @@
  *
  * ─── Email (Resend) ──────────────────────────────────────────────────────────
  *   RESEND_API_KEY    — API key from https://resend.com
- *   RESEND_FROM       — Verified sender, e.g. "RILAN <no-reply@yourdomain.com>"
+ *   RESEND_FROM       — Verified sender, e.g. "SennaVision <no-reply@yourdomain.com>"
  *   NOTIFICATION_EMAIL — Recipient for owner notifications (defaults to RESEND_FROM)
  *
  * ─── AI / LLM (OpenAI-compatible) ────────────────────────────────────────────

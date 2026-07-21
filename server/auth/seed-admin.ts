@@ -88,7 +88,7 @@ export async function seedAdminUser(): Promise<void> {
     const LINE = "═".repeat(58);
     console.log("");
     console.log(`╔${LINE}╗`);
-    console.log(`║${"  RILAN PLATFORM — FIRST-BOOT ADMIN ACCOUNT".padEnd(58)}║`);
+    console.log(`║${"  SennaVision PLATFORM — FIRST-BOOT ADMIN ACCOUNT".padEnd(58)}║`);
     console.log(`╠${LINE}╣`);
     console.log(`║  Email    : ${ADMIN_EMAIL.padEnd(46)}║`);
     console.log(`║  Password : ${plainPassword.padEnd(46)}║`);

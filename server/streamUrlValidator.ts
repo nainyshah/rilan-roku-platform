@@ -116,7 +116,7 @@ export async function checkStreamUrl(
       signal: controller.signal,
       redirect: "follow",
       headers: {
-        "User-Agent": "RILAN-Roku-Platform/1.0 (stream-validator)",
+        "User-Agent": "SennaVision-Roku-Platform/1.0 (stream-validator)",
         Accept: "video/*,application/vnd.apple.mpegurl,application/dash+xml,*/*;q=0.5",
       },
     });

@@ -129,7 +129,7 @@ describe("TOTP helpers", () => {
     const secret = generateTotpSecret();
     const uri = getTotpUri(secret, "user@example.com");
     expect(uri).toMatch(/^otpauth:\/\/totp\//);
-    expect(uri).toContain("RILAN");
+    expect(uri).toContain("SennaVision");
   });
 
   it("verifyTotp returns false for a wrong code", async () => {

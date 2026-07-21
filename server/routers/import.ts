@@ -391,7 +391,7 @@ export const importRouter = router({
     const example = [
       "My Awesome Video", "A short description of the video",
       "https://example.com/thumb.jpg", "https://example.com/video.mp4",
-      "120", "en", "clip", "all", "2024-01-15", "RILAN GAMES LLC",
+      "120", "en", "clip", "all", "2024-01-15", "SennaVision GAMES LLC",
       "gaming,action", "draft", "shorts-tv", "featured",
     ];
     return [headers.join(","), example.join(",")].join("\n");

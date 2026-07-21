@@ -1,0 +1,56 @@
+services:
+  app:
+    build: .
+    container_name: rilan-app
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "3100:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rilan-net
+
+  db:
+    image: mysql:8.0
+    container_name: rilan-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: rilan_roku
+      MYSQL_USER: rilan
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "rilan", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rilan-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: rilan-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rilan-net
+
+volumes:
+  db-data:
+  redis-data:
+
+networks:
+  rilan-net:
+    driver: bridge

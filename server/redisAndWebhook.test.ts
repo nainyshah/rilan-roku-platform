@@ -39,16 +39,16 @@ describe("Redis Feed Cache (mocked)", () => {
 
   it("stores and retrieves a feed", async () => {
     const { setCachedFeedRedis, getCachedFeedRedis } = await import("./redisFeedCache");
-    const feed = { providerName: "RILAN", language: "en", movies: [] };
+    const feed = { providerName: "SennaVision", language: "en", movies: [] };
     await setCachedFeedRedis("test-channel", feed);
     const cached = await getCachedFeedRedis("test-channel");
     expect(cached).not.toBeNull();
-    expect(cached?.providerName).toBe("RILAN");
+    expect(cached?.providerName).toBe("SennaVision");
   });
 
   it("invalidates a specific slug", async () => {
     const { setCachedFeedRedis, getCachedFeedRedis, invalidateFeedCacheRedis } = await import("./redisFeedCache");
-    const feed = { providerName: "RILAN", language: "en", movies: [] };
+    const feed = { providerName: "SennaVision", language: "en", movies: [] };
     await setCachedFeedRedis("slug-to-remove", feed);
     const before = await getCachedFeedRedis("slug-to-remove");
     expect(before).not.toBeNull();

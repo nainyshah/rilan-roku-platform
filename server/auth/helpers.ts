@@ -111,7 +111,7 @@ export function generateTotpSecret(): string {
 }
 
 /** Generate the otpauth:// URI for QR code rendering. */
-export function getTotpUri(secret: string, email: string, issuer = "RILAN Platform"): string {
+export function getTotpUri(secret: string, email: string, issuer = "SennaVision Platform"): string {
   return generateURI({ label: email, secret, issuer });
 }
 

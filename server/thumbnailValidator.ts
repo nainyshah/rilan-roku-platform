@@ -83,7 +83,7 @@ export async function checkThumbnailUrl(
       signal: controller.signal,
       redirect: "follow",
       headers: {
-        "User-Agent": "RILAN-Roku-Platform/1.0 (thumbnail-validator)",
+        "User-Agent": "SennaVision-Roku-Platform/1.0 (thumbnail-validator)",
         Accept: "image/*,*/*;q=0.8",
       },
     });

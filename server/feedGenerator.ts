@@ -1,4 +1,5 @@
 import type { Channel, Video } from "../drizzle/schema";
+import { resolveStreamUrl, resolveThumbnail } from "./bunnySign";
 
 // ─── Roku Direct Publisher Feed Types ─────────────────────────────────────────
 export interface RokuFeedItem {
@@ -87,7 +88,9 @@ const DEFAULT_RATING_SOURCE = "MPAA";
 
 // ─── Feed Item Builder ─────────────────────────────────────────────────────────
 function buildFeedItem(video: Video): RokuFeedItem {
-  const videoType = inferVideoType(video.streamUrl ?? "");
+  const resolved = resolveStreamUrl(video);
+  const streamUrl = resolved ? resolved.url : (video.streamUrl ?? "");
+  const videoType = resolved ? resolved.videoType : inferVideoType(video.streamUrl ?? "");
   const quality = "HD";
 
   const item: RokuFeedItem = {
@@ -97,7 +100,7 @@ function buildFeedItem(video: Video): RokuFeedItem {
       dateAdded: video.createdAt ? new Date(video.createdAt).toISOString() : new Date().toISOString(),
       videos: [
         {
-          url: video.streamUrl!,
+          url: streamUrl,
           quality,
           videoType,
         },
@@ -105,7 +108,7 @@ function buildFeedItem(video: Video): RokuFeedItem {
       duration: video.durationSeconds ?? 0,
       language: video.language ?? "en",
     },
-    thumbnail: video.thumbnailUrl!,
+    thumbnail: resolveThumbnail(video.thumbnailUrl),
     releaseDate: video.releaseDate ?? new Date().toISOString().split("T")[0]!,
     shortDescription: video.description?.substring(0, 200) ?? video.title,
     longDescription: video.description ?? undefined,
@@ -158,7 +161,7 @@ function resolveRating(contentRating: string | null | undefined): { rating: stri
   if (cr === "tv-14" || cr === "tv14")  return { rating: "TV-14", ratingSource: "USA_TV" };
   if (cr === "tv-ma" || cr === "tvma")  return { rating: "TV-MA", ratingSource: "USA_TV" };
 
-  // RILAN semantic aliases
+  // SennaVision semantic aliases
   if (cr === "all" || cr === "everyone") return { rating: "G",     ratingSource: "MPAA"   };
   if (cr === "kids")                     return { rating: "TV-Y",  ratingSource: "USA_TV" };
   if (cr === "family")                   return { rating: "TV-G",  ratingSource: "USA_TV" };
