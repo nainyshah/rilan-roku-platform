@@ -10,8 +10,9 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getFeedData, getChannelBySlug, getChannels } from "../db";
 import { generateRokuFeed } from "../feedGenerator";
-import { getScreensaverItems } from "../db";
+import { getScreensaverItems, getScreensaverApps, getScreensaverAppBySlug } from "../db";
 import { resolveThumbnail, resolveStreamUrl } from "../bunnySign";
+
 import {
   getCachedFeedRedis,
   setCachedFeedRedis,

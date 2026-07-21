@@ -44,6 +44,11 @@ import {
   createScreensaverItem,       // ← add
   updateScreensaverItem,       // ← add
   deleteScreensaverItem,       // ← add
+  getScreensaverApps,
+  getScreensaverAppBySlug,
+  createScreensaverApp,
+  updateScreensaverApp,
+  deleteScreensaverApp
 } from "./db";
 import { storagePut } from "./storage";
 import { generateRokuFeed, generateValidationReport, validateVideo } from "./feedGenerator";
@@ -610,13 +615,40 @@ export const appRouter = router({
       }),
   }),
 
-  // ─── Screensavers ────────────────────────────────────────────────────────────
+  // ─── Screensaver apps (datasets) ─────────────────────────────────────────────
+  screensaverApps: router({
+    list: adminProcedure.query(async () => getScreensaverApps()),
+    create: adminProcedure
+      .input(z.object({ name: z.string().min(1), description: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        await createScreensaverApp({
+          name: input.name,
+          slug: slugify(input.name),
+          description: input.description ?? null,
+          isActive: 1,
+        });
+        return { success: true };
+      }),
+    update: adminProcedure
+      .input(z.object({ id: z.number(), name: z.string().optional(), description: z.string().optional(), isActive: z.number().optional() }))
+      .mutation(async ({ input }) => {
+        const { id, ...rest } = input;
+        await updateScreensaverApp(id, rest);
+        return { success: true };
+      }),
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => { await deleteScreensaverApp(input.id); return { success: true }; }),
+  }),
+
+  // ─── Screensaver items (scoped to an app) ────────────────────────────────────
   screensaver: router({
-    list: adminProcedure.query(async () => {
-      return getScreensaverItems(false);
-    }),
+    list: adminProcedure
+      .input(z.object({ appId: z.number() }))
+      .query(async ({ input }) => getScreensaverItems(input.appId, false)),
     create: adminProcedure
       .input(z.object({
+        appId: z.number(),
         title: z.string().optional(),
         mediaType: z.enum(["image", "video"]).default("image"),
         imageUrl: z.string().optional(),
@@ -625,6 +657,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         await createScreensaverItem({
+          appId: input.appId,
           title: input.title ?? null,
           mediaType: input.mediaType,
           imageUrl: input.imageUrl ?? null,
@@ -651,10 +684,7 @@ export const appRouter = router({
       }),
     delete: adminProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        await deleteScreensaverItem(input.id);
-        return { success: true };
-      }),
+      .mutation(async ({ input }) => { await deleteScreensaverItem(input.id); return { success: true }; }),
   }),
 
   // ─── Import ─────────────────────────────────────────────────────────────────

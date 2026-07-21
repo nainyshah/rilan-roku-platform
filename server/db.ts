@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray, like, or, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { screensaverItems } from "../drizzle/schema";
-import type { InsertScreensaverItem, ScreensaverItem } from "../drizzle/schema";
+import { screensaverItems, screensaverApps } from "../drizzle/schema";
+import type { InsertScreensaverItem, ScreensaverItem, InsertScreensaverApp, ScreensaverApp } from "../drizzle/schema";
+
 
 import {
   InsertUser,
@@ -30,14 +31,15 @@ export async function getDb() {
 }
 
 // ─── Screensaver items ────────────────────────────────────────────────────────
-export async function getScreensaverItems(activeOnly = false): Promise<ScreensaverItem[]> {
+export async function getScreensaverItems(appId?: number, activeOnly = false): Promise<ScreensaverItem[]> {
   const db = await getDb();
   if (!db) return [];
   const rows = await db
     .select()
     .from(screensaverItems)
     .orderBy(asc(screensaverItems.sortOrder), asc(screensaverItems.id));
-  return activeOnly ? rows.filter((r) => r.isActive === 1) : rows;
+  let out = appId !== undefined ? rows.filter((r) => r.appId === appId) : rows;
+  return activeOnly ? out.filter((r) => r.isActive === 1) : out;
 }
 
 export async function createScreensaverItem(data: InsertScreensaverItem): Promise<void> {
@@ -59,6 +61,35 @@ export async function deleteScreensaverItem(id: number): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.delete(screensaverItems).where(eq(screensaverItems.id, id));
+}
+
+// ─── Screensaver apps ─────────────────────────────────────────────────────────
+export async function getScreensaverApps(): Promise<ScreensaverApp[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(screensaverApps).orderBy(asc(screensaverApps.id));
+}
+export async function getScreensaverAppBySlug(slug: string): Promise<ScreensaverApp | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(screensaverApps).where(eq(screensaverApps.slug, slug));
+  return rows[0] ?? null;
+}
+export async function createScreensaverApp(data: InsertScreensaverApp): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(screensaverApps).values(data);
+}
+export async function updateScreensaverApp(id: number, data: Partial<InsertScreensaverApp>): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(screensaverApps).set(data).where(eq(screensaverApps.id, id));
+}
+export async function deleteScreensaverApp(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(screensaverItems).where(eq(screensaverItems.appId, id)); // remove its media
+  await db.delete(screensaverApps).where(eq(screensaverApps.id, id));
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────

@@ -220,6 +220,7 @@ export type InsertWebhookConfig = typeof webhookConfigs.$inferInsert;
 export const screensaverItems = mysqlTable("screensaver_items", {
   id: int("id").autoincrement().primaryKey(),
   title: varchar("title", { length: 255 }),
+  appId: int("appId"),   // which screensaver app this item belongs to
   mediaType: mysqlEnum("mediaType", ["image", "video"]).default("image").notNull(),
   imageUrl: text("imageUrl"),          // image item, or poster for a video item
   videoUrl: text("videoUrl"),          // HLS/MP4 for a video (slow-mo) item
@@ -228,8 +229,24 @@ export const screensaverItems = mysqlTable("screensaver_items", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
 export type ScreensaverItem = typeof screensaverItems.$inferSelect;
 export type InsertScreensaverItem = typeof screensaverItems.$inferInsert;
+
+
+// ─── Screensaver apps (datasets) ──────────────────────────────────────────────
+export const screensaverApps = mysqlTable("screensaver_apps", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  description: text("description"),
+  isActive: int("isActive").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ScreensaverApp = typeof screensaverApps.$inferSelect;
+export type InsertScreensaverApp = typeof screensaverApps.$inferInsert;
+
 
 // ─── Webhook Deliveries ───────────────────────────────────────────────────────
 export const webhookDeliveries = mysqlTable("webhook_deliveries", {
