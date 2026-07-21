@@ -26,6 +26,7 @@ import {
 
 import { useIsMobile } from "@/hooks/useMobile";
 import {
+  MonitorPlay,
   BarChart3,
   Film,
   FolderOpen,
@@ -66,6 +67,7 @@ const contentMenuItems = [
 
 const publishMenuItems = [
   { icon: Image, label: "Branding", path: "/branding" },
+  { icon: MonitorPlay, label: "Screensavers", path: "/screensavers" }, 
   { icon: Rss, label: "Feed Preview", path: "/feed-preview" },
   { icon: Send, label: "Publishing", path: "/publishing" },
   { icon: Webhook, label: "Webhooks", path: "/webhooks" },

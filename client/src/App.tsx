@@ -30,6 +30,7 @@ import Login from "./pages/Login";
 import ChangePassword from "./pages/ChangePassword";
 import SetupTotp from "./pages/SetupTotp";
 import UserManagement from "./pages/UserManagement";
+import Screensavers from "@/pages/Screensavers";      // near the other page imports
 
 /** Magic-link callback handler — verifies token and redirects */
 function MagicLinkCallback() {
@@ -111,6 +112,7 @@ function ProtectedRouter() {
           <Route path="/change-password" component={ChangePassword} />
           <Route path="/setup-2fa" component={SetupTotp} />
           <Route path="/users" component={UserManagement} />
+          <Route path="/screensavers" component={Screensavers} />
           <Route component={NotFound} />
         </Switch>
       </DashboardLayout>

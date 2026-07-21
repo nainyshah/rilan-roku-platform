@@ -1,5 +1,8 @@
 import { and, desc, eq, inArray, like, or, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { screensaverItems } from "../drizzle/schema";
+import type { InsertScreensaverItem, ScreensaverItem } from "../drizzle/schema";
+
 import {
   InsertUser,
   assets,
@@ -24,6 +27,38 @@ export async function getDb() {
     }
   }
   return _db;
+}
+
+// ─── Screensaver items ────────────────────────────────────────────────────────
+export async function getScreensaverItems(activeOnly = false): Promise<ScreensaverItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(screensaverItems)
+    .orderBy(asc(screensaverItems.sortOrder), asc(screensaverItems.id));
+  return activeOnly ? rows.filter((r) => r.isActive === 1) : rows;
+}
+
+export async function createScreensaverItem(data: InsertScreensaverItem): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(screensaverItems).values(data);
+}
+
+export async function updateScreensaverItem(
+  id: number,
+  data: Partial<InsertScreensaverItem>,
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(screensaverItems).set(data).where(eq(screensaverItems.id, id));
+}
+
+export async function deleteScreensaverItem(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(screensaverItems).where(eq(screensaverItems.id, id));
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────

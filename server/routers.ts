@@ -40,6 +40,10 @@ import {
   updateVideoStatus,
   upsertUser,
   getAllDistinctTags,
+  getScreensaverItems,         // ← add
+  createScreensaverItem,       // ← add
+  updateScreensaverItem,       // ← add
+  deleteScreensaverItem,       // ← add
 } from "./db";
 import { storagePut } from "./storage";
 import { generateRokuFeed, generateValidationReport, validateVideo } from "./feedGenerator";
@@ -602,6 +606,53 @@ export const appRouter = router({
       .input(z.object({ assetId: z.number() }))
       .mutation(async ({ input }) => {
         await deleteAsset(input.assetId);
+        return { success: true };
+      }),
+  }),
+
+  // ─── Screensavers ────────────────────────────────────────────────────────────
+  screensaver: router({
+    list: adminProcedure.query(async () => {
+      return getScreensaverItems(false);
+    }),
+    create: adminProcedure
+      .input(z.object({
+        title: z.string().optional(),
+        mediaType: z.enum(["image", "video"]).default("image"),
+        imageUrl: z.string().optional(),
+        videoUrl: z.string().optional(),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await createScreensaverItem({
+          title: input.title ?? null,
+          mediaType: input.mediaType,
+          imageUrl: input.imageUrl ?? null,
+          videoUrl: input.videoUrl ?? null,
+          sortOrder: input.sortOrder ?? 0,
+          isActive: 1,
+        });
+        return { success: true };
+      }),
+    update: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        mediaType: z.enum(["image", "video"]).optional(),
+        imageUrl: z.string().optional(),
+        videoUrl: z.string().optional(),
+        sortOrder: z.number().optional(),
+        isActive: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...rest } = input;
+        await updateScreensaverItem(id, rest);
+        return { success: true };
+      }),
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteScreensaverItem(input.id);
         return { success: true };
       }),
   }),

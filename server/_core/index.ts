@@ -10,6 +10,8 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getFeedData, getChannelBySlug, getChannels } from "../db";
 import { generateRokuFeed } from "../feedGenerator";
+import { getScreensaverItems } from "../db";
+import { resolveThumbnail, resolveStreamUrl } from "../bunnySign";
 import {
   getCachedFeedRedis,
   setCachedFeedRedis,
@@ -150,6 +152,37 @@ async function startServer() {
     } catch (err) {
       console.error("[Feed] Error generating feed:", err);
       res.status(500).json({ error: "Feed generation failed" });
+    }
+  });
+
+  // GET /api/roku/screensaver.json — media for the SennaVision Roku screensaver
+  app.get("/api/roku/screensaver.json", async (_req, res) => {
+    try {
+      const items = await getScreensaverItems(true);
+      const out: any[] = [];
+      for (const it of items) {
+        if (it.mediaType === "video" && it.videoUrl) {
+          const r = resolveStreamUrl({ streamUrl: it.videoUrl, thumbnailUrl: it.imageUrl });
+          const video = r ? r.url : it.videoUrl;
+          if (!video) continue;
+          out.push({
+            type: "video",
+            video,
+            videoType: (r ? r.videoType : "HLS").toLowerCase(),
+            image: it.imageUrl ? resolveThumbnail(it.imageUrl) : "",
+            title: it.title ?? "",
+          });
+        } else if (it.imageUrl) {
+          out.push({ type: "image", image: resolveThumbnail(it.imageUrl), title: it.title ?? "" });
+        }
+      }
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.json({ providerName: "SennaVision", intervalSeconds: 8, items: out });
+    } catch (err) {
+      console.error("[Screensaver] error:", err);
+      res.status(500).json({ error: "Screensaver feed failed" });
     }
   });
 

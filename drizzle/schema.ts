@@ -216,6 +216,21 @@ export const webhookConfigs = mysqlTable("webhook_configs", {
 export type WebhookConfig = typeof webhookConfigs.$inferSelect;
 export type InsertWebhookConfig = typeof webhookConfigs.$inferInsert;
 
+// ─── Screensaver items ────────────────────────────────────────────────────────
+export const screensaverItems = mysqlTable("screensaver_items", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }),
+  mediaType: mysqlEnum("mediaType", ["image", "video"]).default("image").notNull(),
+  imageUrl: text("imageUrl"),          // image item, or poster for a video item
+  videoUrl: text("videoUrl"),          // HLS/MP4 for a video (slow-mo) item
+  sortOrder: int("sortOrder").default(0).notNull(),
+  isActive: int("isActive").default(1).notNull(),   // 1 = shown, 0 = hidden
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ScreensaverItem = typeof screensaverItems.$inferSelect;
+export type InsertScreensaverItem = typeof screensaverItems.$inferInsert;
+
 // ─── Webhook Deliveries ───────────────────────────────────────────────────────
 export const webhookDeliveries = mysqlTable("webhook_deliveries", {
   id: int("id").autoincrement().primaryKey(),
