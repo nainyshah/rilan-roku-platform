@@ -156,35 +156,45 @@ async function startServer() {
     }
   });
 
-  // GET /api/roku/screensaver.json — media for the SennaVision Roku screensaver
-  app.get("/api/roku/screensaver.json", async (_req, res) => {
-    try {
-      const items = await getScreensaverItems(true);
-      const out: any[] = [];
-      for (const it of items) {
-        if (it.mediaType === "video" && it.videoUrl) {
-          const r = resolveStreamUrl({ streamUrl: it.videoUrl, thumbnailUrl: it.imageUrl });
-          const video = r ? r.url : it.videoUrl;
-          if (!video) continue;
-          out.push({
-            type: "video",
-            video,
-            videoType: (r ? r.videoType : "HLS").toLowerCase(),
-            image: it.imageUrl ? resolveThumbnail(it.imageUrl) : "",
-            title: it.title ?? "",
-          });
-        } else if (it.imageUrl) {
-          out.push({ type: "image", image: resolveThumbnail(it.imageUrl), title: it.title ?? "" });
-        }
+  function screensaverPayload(items, providerName) {
+    const out = [];
+    for (const it of items) {
+      if (it.mediaType === "video" && it.videoUrl) {
+        const r = resolveStreamUrl({ streamUrl: it.videoUrl, thumbnailUrl: it.imageUrl });
+        const video = r ? r.url : it.videoUrl;
+        if (!video) continue;
+        out.push({ type: "video", video, videoType: (r ? r.videoType : "HLS").toLowerCase(),
+          image: it.imageUrl ? resolveThumbnail(it.imageUrl) : "", title: it.title ?? "" });
+      } else if (it.imageUrl) {
+        out.push({ type: "image", image: resolveThumbnail(it.imageUrl), title: it.title ?? "" });
       }
+    }
+    return { providerName, intervalSeconds: 8, items: out };
+  }
+
+  app.get("/api/roku/screensaver/:slug", async (req, res) => {
+    try {
+      const slug = req.params.slug.replace(/\.json$/, "");
+      const appRow = await getScreensaverAppBySlug(slug);
+      if (!appRow || appRow.isActive !== 1) { res.status(404).json({ error: "Screensaver app not found" }); return; }
+      const items = await getScreensaverItems(appRow.id, true);
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Cache-Control", "public, max-age=60");
       res.setHeader("Access-Control-Allow-Origin", "*");
-      res.json({ providerName: "SennaVision", intervalSeconds: 8, items: out });
-    } catch (err) {
-      console.error("[Screensaver] error:", err);
-      res.status(500).json({ error: "Screensaver feed failed" });
-    }
+      res.json(screensaverPayload(items, appRow.name));
+    } catch (err) { console.error("[Screensaver] error:", err); res.status(500).json({ error: "Screensaver feed failed" }); }
+  });
+
+  app.get("/api/roku/screensaver.json", async (_req, res) => {
+    try {
+      const apps = await getScreensaverApps();
+      const first = apps.find((a) => a.isActive === 1);
+      const items = first ? await getScreensaverItems(first.id, true) : [];
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.json(screensaverPayload(items, first ? first.name : "SennaVision"));
+    } catch (err) { console.error("[Screensaver] error:", err); res.status(500).json({ error: "Screensaver feed failed" }); }
   });
 
   // ─── Config schema version ──────────────────────────────────────────────────
