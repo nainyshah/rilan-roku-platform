@@ -251,6 +251,7 @@ async function startServer() {
   });
 
   // Seed the initial admin user if none exists yet
+  app.use("/uploads", express.static("/app/uploads", { maxAge: "7d" }));
   await seedAdminUser();
 
   // ─── Google OAuth routes ──────────────────────────────────────────────────
